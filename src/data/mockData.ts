@@ -1,4 +1,3 @@
-
 import { User, Subcontractor, Project, ProjectSubcontractor, QualificationDocument, Invitation, UserRole } from "../types";
 
 // Helper function to create a date with offset in days from today
@@ -16,7 +15,8 @@ export const mockUsers: User[] = [
     name: "John Builder",
     role: "general-contractor",
     companyName: "Build Inc.",
-    createdAt: new Date("2023-01-15")
+    createdAt: new Date("2023-01-15"),
+    emailVerified: true
   },
   {
     id: "gc-2",
@@ -24,7 +24,8 @@ export const mockUsers: User[] = [
     name: "Jane Constructor",
     role: "general-contractor",
     companyName: "Construct Pro",
-    createdAt: new Date("2023-02-10")
+    createdAt: new Date("2023-02-10"),
+    emailVerified: true
   },
   {
     id: "sub-1",
@@ -32,7 +33,8 @@ export const mockUsers: User[] = [
     name: "Mike Electric",
     role: "subcontractor",
     companyName: "Electric Pros",
-    createdAt: new Date("2023-03-05")
+    createdAt: new Date("2023-03-05"),
+    emailVerified: true
   },
   {
     id: "sub-2",
@@ -40,7 +42,8 @@ export const mockUsers: User[] = [
     name: "Sarah Plumber",
     role: "subcontractor",
     companyName: "Plumbing Experts",
-    createdAt: new Date("2023-03-15")
+    createdAt: new Date("2023-03-15"),
+    emailVerified: true
   },
   {
     id: "sub-3",
@@ -48,7 +51,8 @@ export const mockUsers: User[] = [
     name: "Dave Roofer",
     role: "subcontractor",
     companyName: "Roof Masters",
-    createdAt: new Date("2023-04-20")
+    createdAt: new Date("2023-04-20"),
+    emailVerified: false
   }
 ];
 

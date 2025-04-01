@@ -42,7 +42,7 @@ const Invitation = () => {
 
       // Call the verify_invitation_code function
       const { data, error } = await supabase
-        .rpc<InvitationData>('verify_invitation_code', { code_param: inviteCode.trim() });
+        .rpc<InvitationData[]>('verify_invitation_code', { code_param: inviteCode.trim() });
 
       if (error) {
         throw error;
