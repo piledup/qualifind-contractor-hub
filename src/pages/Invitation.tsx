@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   Card, 
   CardContent, 
@@ -16,32 +16,56 @@ import { supabase } from '@/integrations/supabase/client';
 const Invitation = () => {
   const [inviteCode, setInviteCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     
     try {
-      // For now, we'll just validate that the invitation code exists
-      // In a real application, you would verify this against your database
       if (inviteCode.trim().length < 6) {
         toast({
           title: "Invalid invitation code",
           description: "Please enter a valid invitation code.",
           variant: "destructive"
         });
+        setLoading(false);
         return;
       }
 
-      // Placeholder for real verification logic
-      toast({
-        title: "Invitation code accepted",
-        description: "You can now register with this invitation.",
-      });
-      
-      // In a real app, you would redirect to registration with the invite code
-      // navigate('/register?invite=' + inviteCode);
-      
+      // Call the verify_invitation_code function
+      const { data, error } = await supabase
+        .rpc('verify_invitation_code', { code_param: inviteCode.trim() });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data && data.length > 0 && data[0].valid) {
+        const invitationData = data[0];
+        
+        toast({
+          title: "Invitation code accepted",
+          description: `You have been invited by ${invitationData.general_contractor_name}.`,
+        });
+        
+        // Store invitation data in localStorage for use during registration
+        localStorage.setItem('invitationData', JSON.stringify({
+          email: invitationData.email,
+          generalContractorId: invitationData.general_contractor_id,
+          generalContractorName: invitationData.general_contractor_name,
+          code: inviteCode.trim()
+        }));
+        
+        // Redirect to registration with pre-filled email
+        navigate(`/register?email=${encodeURIComponent(invitationData.email)}&invited=true`);
+      } else {
+        toast({
+          title: "Invalid invitation code",
+          description: "This invitation code is invalid, expired, or has already been used.",
+          variant: "destructive"
+        });
+      }
     } catch (error) {
       console.error("Error verifying invitation code:", error);
       toast({

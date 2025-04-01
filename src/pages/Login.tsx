@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { UserRole } from "@/types";
 import { toast } from "@/components/ui/use-toast";
+import { AlertCircle } from "lucide-react";
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -18,6 +19,7 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<UserRole>("general-contractor");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   
   // Redirect if already authenticated
   useEffect(() => {
@@ -33,6 +35,7 @@ const Login: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError("");
     
     try {
       const user = await login(email, password, role);
@@ -47,8 +50,11 @@ const Login: React.FC = () => {
         } else {
           navigate("/sub-dashboard");
         }
+      } else {
+        setError("Invalid email or password");
       }
-    } catch (err) {
+    } catch (err: any) {
+      setError(err.message || "Login failed");
       console.error(err);
     } finally {
       setLoading(false);
@@ -71,6 +77,13 @@ const Login: React.FC = () => {
           </CardHeader>
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
+              {error && (
+                <div className="flex items-center gap-2 bg-red-50 text-red-600 p-3 rounded-md text-sm">
+                  <AlertCircle size={16} />
+                  <span>{error}</span>
+                </div>
+              )}
+              
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -93,6 +106,14 @@ const Login: React.FC = () => {
                   required
                   placeholder="••••••••"
                 />
+                <div className="text-right">
+                  <Link 
+                    to="/reset-password" 
+                    className="text-sm text-qualifind-orange hover:underline"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
               </div>
               
               <div className="space-y-2">

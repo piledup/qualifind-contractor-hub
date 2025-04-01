@@ -1,17 +1,19 @@
 
 import React, { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { UserRole } from "@/types";
 import { toast } from "@/components/ui/use-toast";
+import { AlertCircle, BadgeCheck } from "lucide-react";
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { register, isAuthenticated, currentUser } = useAuth();
   
   const [name, setName] = useState("");
@@ -22,6 +24,31 @@ const Register: React.FC = () => {
   const [role, setRole] = useState<UserRole>("general-contractor");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [invitationData, setInvitationData] = useState<any>(null);
+  
+  // Parse URL query params for invitation data
+  useEffect(() => {
+    const queryParams = new URLSearchParams(location.search);
+    const emailParam = queryParams.get('email');
+    const isInvited = queryParams.get('invited') === 'true';
+
+    if (emailParam) {
+      setEmail(emailParam);
+    }
+
+    if (isInvited) {
+      const storedInvitationData = localStorage.getItem('invitationData');
+      if (storedInvitationData) {
+        try {
+          const parsedData = JSON.parse(storedInvitationData);
+          setInvitationData(parsedData);
+          setRole('subcontractor'); // Invited users are always subcontractors
+        } catch (e) {
+          console.error("Error parsing invitation data", e);
+        }
+      }
+    }
+  }, [location.search]);
   
   // Redirect if already authenticated
   useEffect(() => {
@@ -45,17 +72,51 @@ const Register: React.FC = () => {
     setLoading(true);
     
     try {
-      const user = await register(email, password, name, companyName, role);
-      if (user) {
-        toast({
-          title: "Registration successful",
-          description: "Your account has been created successfully."
-        });
-        
-        if (user.role === "general-contractor") {
-          navigate("/dashboard");
-        } else {
+      // If registering with an invitation
+      if (invitationData) {
+        const userData = {
+          email,
+          password,
+          name,
+          companyName,
+          role: 'subcontractor' as UserRole, // Force role to be subcontractor
+          invitedBy: invitationData.generalContractorId,
+          invitationCode: invitationData.code
+        };
+
+        const user = await register(
+          userData.email, 
+          userData.password, 
+          userData.name, 
+          userData.companyName, 
+          userData.role,
+          userData.invitedBy,
+          userData.invitationCode
+        );
+
+        if (user) {
+          localStorage.removeItem('invitationData'); // Clear invitation data
+          toast({
+            title: "Registration successful",
+            description: "Your account has been created successfully."
+          });
           navigate("/sub-dashboard");
+        }
+      } else {
+        // Regular registration
+        const user = await register(email, password, name, companyName, role);
+        
+        if (user) {
+          toast({
+            title: "Registration successful",
+            description: "Your account has been created successfully."
+          });
+          
+          if (user.role === "general-contractor") {
+            navigate("/dashboard");
+          } else {
+            navigate("/sub-dashboard");
+          }
         }
       }
     } catch (err: any) {
@@ -79,12 +140,19 @@ const Register: React.FC = () => {
         <Card>
           <CardHeader>
             <CardTitle>Register</CardTitle>
+            {invitationData && (
+              <CardDescription className="flex items-center gap-2 mt-2 p-2 bg-green-50 text-green-700 rounded-md">
+                <BadgeCheck size={18} />
+                <span>You were invited by {invitationData.generalContractorName}</span>
+              </CardDescription>
+            )}
           </CardHeader>
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
               {error && (
-                <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm">
-                  {error}
+                <div className="flex items-center gap-2 bg-red-50 text-red-600 p-3 rounded-md text-sm">
+                  <AlertCircle size={16} />
+                  <span>{error}</span>
                 </div>
               )}
               
@@ -119,6 +187,7 @@ const Register: React.FC = () => {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   placeholder="email@company.com"
+                  disabled={!!invitationData}
                 />
               </div>
               
@@ -146,23 +215,25 @@ const Register: React.FC = () => {
                 />
               </div>
               
-              <div className="space-y-2">
-                <Label>Account Type</Label>
-                <RadioGroup 
-                  value={role} 
-                  onValueChange={(val) => setRole(val as UserRole)}
-                  className="flex space-x-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="general-contractor" id="gc" />
-                    <Label htmlFor="gc" className="cursor-pointer">General Contractor</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="subcontractor" id="sub" />
-                    <Label htmlFor="sub" className="cursor-pointer">Subcontractor</Label>
-                  </div>
-                </RadioGroup>
-              </div>
+              {!invitationData && (
+                <div className="space-y-2">
+                  <Label>Account Type</Label>
+                  <RadioGroup 
+                    value={role} 
+                    onValueChange={(val) => setRole(val as UserRole)}
+                    className="flex space-x-4"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="general-contractor" id="gc" />
+                      <Label htmlFor="gc" className="cursor-pointer">General Contractor</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="subcontractor" id="sub" />
+                      <Label htmlFor="sub" className="cursor-pointer">Subcontractor</Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+              )}
             </CardContent>
             
             <CardFooter className="flex-col space-y-4">
@@ -180,11 +251,13 @@ const Register: React.FC = () => {
                   Sign in
                 </Link>
               </p>
-              <p className="text-sm text-center text-gray-500">
-                <Link to="/invitation" className="hover:underline">
-                  Have an invitation code?
-                </Link>
-              </p>
+              {!invitationData && (
+                <p className="text-sm text-center text-gray-500">
+                  <Link to="/invitation" className="hover:underline">
+                    Have an invitation code?
+                  </Link>
+                </p>
+              )}
             </CardFooter>
           </form>
         </Card>

@@ -10,6 +10,9 @@ import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Index from "./pages/Index";
+import Invitation from "./pages/Invitation";
+import ResetPassword from "./pages/ResetPassword";
+import UpdatePassword from "./pages/UpdatePassword";
 
 // General Contractor Pages
 import GCDashboard from "./pages/gc/Dashboard";
@@ -61,6 +64,9 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/invitation" element={<Invitation />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/update-password" element={<UpdatePassword />} />
 
             {/* General Contractor Routes */}
             <Route 

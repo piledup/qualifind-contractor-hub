@@ -9,12 +9,65 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      invitations: {
+        Row: {
+          code: string
+          created_at: string | null
+          email: string
+          expires_at: string | null
+          general_contractor_id: string | null
+          id: string
+          status: string
+        }
+        Insert: {
+          code: string
+          created_at?: string | null
+          email: string
+          expires_at?: string | null
+          general_contractor_id?: string | null
+          id?: string
+          status?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string | null
+          email?: string
+          expires_at?: string | null
+          general_contractor_id?: string | null
+          id?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      permissions: {
+        Row: {
+          created_at: string | null
+          id: string
+          permission: string
+          role: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          permission: string
+          role: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          permission?: string
+          role?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           company_name: string | null
           created_at: string
           email: string
+          email_verified: boolean | null
           id: string
+          last_sign_in: string | null
           name: string
           role: string
           updated_at: string
@@ -23,7 +76,9 @@ export type Database = {
           company_name?: string | null
           created_at?: string
           email: string
+          email_verified?: boolean | null
           id: string
+          last_sign_in?: string | null
           name: string
           role: string
           updated_at?: string
@@ -32,7 +87,9 @@ export type Database = {
           company_name?: string | null
           created_at?: string
           email?: string
+          email_verified?: boolean | null
           id?: string
+          last_sign_in?: string | null
           name?: string
           role?: string
           updated_at?: string
@@ -44,7 +101,24 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_permission: {
+        Args: {
+          user_id: string
+          permission_name: string
+        }
+        Returns: boolean
+      }
+      verify_invitation_code: {
+        Args: {
+          code_param: string
+        }
+        Returns: {
+          valid: boolean
+          email: string
+          general_contractor_id: string
+          general_contractor_name: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

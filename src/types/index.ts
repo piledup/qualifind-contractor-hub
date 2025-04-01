@@ -9,6 +9,8 @@ export interface User {
   companyName: string;
   companyLogo?: string;
   createdAt: Date;
+  emailVerified?: boolean;
+  lastSignIn?: Date;
 }
 
 export type QualificationStatus = 'qualified' | 'unqualified' | 'pending';
@@ -69,4 +71,11 @@ export interface Invitation {
   status: 'pending' | 'accepted' | 'expired';
   createdAt: Date;
   expiresAt: Date;
+}
+
+export interface Permission {
+  id: string;
+  role: string;
+  permission: string;
+  createdAt: Date;
 }
