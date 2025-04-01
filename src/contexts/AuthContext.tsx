@@ -202,12 +202,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // If registration came from invitation, update invitation status
         if (invitationCode && role === 'subcontractor') {
           const { error: inviteError } = await supabase
-            .from('invitations')
-            .update({ status: 'accepted' })
-            .eq('code', invitationCode);
-          
-          if (inviteError) {
-            console.error("Error updating invitation:", inviteError);
+            .rpc('verify_invitation_code', { code_param: invitationCode })
+            .single();
+
+          if (!inviteError) {
+            // Update the invitation status
+            const { error: updateError } = await supabase
+              .from('invitations')
+              .update({ status: 'accepted' })
+              .eq('code', invitationCode);
+            
+            if (updateError) {
+              console.error("Error updating invitation:", updateError);
+            }
           }
         }
 
@@ -219,6 +226,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           companyName,
           createdAt: new Date(),
           emailVerified: false,
+          lastSignIn: undefined
         };
         setCurrentUser(user);
         

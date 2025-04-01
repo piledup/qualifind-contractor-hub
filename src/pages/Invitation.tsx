@@ -13,6 +13,13 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
+interface InvitationData {
+  valid: boolean;
+  email: string;
+  general_contractor_id: string;
+  general_contractor_name: string;
+}
+
 const Invitation = () => {
   const [inviteCode, setInviteCode] = useState('');
   const [loading, setLoading] = useState(false);
@@ -35,7 +42,7 @@ const Invitation = () => {
 
       // Call the verify_invitation_code function
       const { data, error } = await supabase
-        .rpc('verify_invitation_code', { code_param: inviteCode.trim() });
+        .rpc<InvitationData>('verify_invitation_code', { code_param: inviteCode.trim() });
 
       if (error) {
         throw error;

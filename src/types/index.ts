@@ -9,7 +9,7 @@ export interface User {
   companyName: string;
   companyLogo?: string;
   createdAt: Date;
-  emailVerified?: boolean;
+  emailVerified: boolean;
   lastSignIn?: Date;
 }
 
