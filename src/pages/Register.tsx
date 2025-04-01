@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -8,10 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { UserRole } from "@/types";
+import { toast } from "@/components/ui/use-toast";
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
-  const { register } = useAuth();
+  const { register, isAuthenticated, currentUser } = useAuth();
   
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -21,6 +22,17 @@ const Register: React.FC = () => {
   const [role, setRole] = useState<UserRole>("general-contractor");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated && currentUser) {
+      if (currentUser.role === "general-contractor") {
+        navigate("/dashboard");
+      } else {
+        navigate("/sub-dashboard");
+      }
+    }
+  }, [isAuthenticated, currentUser, navigate]);
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,8 +45,19 @@ const Register: React.FC = () => {
     setLoading(true);
     
     try {
-      await register(email, password, name, companyName, role);
-      navigate("/dashboard");
+      const user = await register(email, password, name, companyName, role);
+      if (user) {
+        toast({
+          title: "Registration successful",
+          description: "Your account has been created successfully."
+        });
+        
+        if (user.role === "general-contractor") {
+          navigate("/dashboard");
+        } else {
+          navigate("/sub-dashboard");
+        }
+      }
     } catch (err: any) {
       setError(err.message || "Failed to create account");
       console.error(err);

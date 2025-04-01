@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -8,27 +8,47 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { UserRole } from "@/types";
+import { toast } from "@/components/ui/use-toast";
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, isAuthenticated, currentUser } = useAuth();
   
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<UserRole>("general-contractor");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated && currentUser) {
+      if (currentUser.role === "general-contractor") {
+        navigate("/dashboard");
+      } else {
+        navigate("/sub-dashboard");
+      }
+    }
+  }, [isAuthenticated, currentUser, navigate]);
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
     setLoading(true);
     
     try {
-      await login(email, password, role);
-      navigate("/dashboard");
+      const user = await login(email, password, role);
+      if (user) {
+        toast({
+          title: "Login successful",
+          description: `Welcome back, ${user.name}!`
+        });
+        
+        if (user.role === "general-contractor") {
+          navigate("/dashboard");
+        } else {
+          navigate("/sub-dashboard");
+        }
+      }
     } catch (err) {
-      setError("Failed to login. Please check your credentials.");
       console.error(err);
     } finally {
       setLoading(false);
@@ -51,12 +71,6 @@ const Login: React.FC = () => {
           </CardHeader>
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
-              {error && (
-                <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm">
-                  {error}
-                </div>
-              )}
-              
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
