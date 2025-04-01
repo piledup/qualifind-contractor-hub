@@ -40,15 +40,17 @@ const Invitation = () => {
         return;
       }
 
-      // Call the verify_invitation_code function
+      // Call the verify_invitation_code function with proper type parameters
+      // First parameter is the return type, second is the parameters type
       const { data, error } = await supabase
-        .rpc<InvitationData[]>('verify_invitation_code', { code_param: inviteCode.trim() });
+        .rpc<InvitationData[], { code_param: string }>('verify_invitation_code', { code_param: inviteCode.trim() });
 
       if (error) {
         throw error;
       }
 
-      if (data && data.length > 0 && data[0].valid) {
+      // Check if data exists and is an array with at least one valid entry
+      if (data && Array.isArray(data) && data.length > 0 && data[0].valid) {
         const invitationData = data[0];
         
         toast({
