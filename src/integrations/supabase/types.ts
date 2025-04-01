@@ -96,6 +96,167 @@ export type Database = {
         }
         Relationships: []
       }
+      project_subcontractors: {
+        Row: {
+          assigned_at: string
+          contract_amount: number | null
+          project_id: string
+          subcontractor_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          contract_amount?: number | null
+          project_id: string
+          subcontractor_id: string
+        }
+        Update: {
+          assigned_at?: string
+          contract_amount?: number | null
+          project_id?: string
+          subcontractor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_subcontractors_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_subcontractors_subcontractor_id_fkey"
+            columns: ["subcontractor_id"]
+            isOneToOne: false
+            referencedRelation: "subcontractors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          budget: number | null
+          created_at: string
+          created_by: string
+          description: string | null
+          end_date: string | null
+          id: string
+          location: string | null
+          name: string
+          start_date: string | null
+        }
+        Insert: {
+          budget?: number | null
+          created_at?: string
+          created_by: string
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          location?: string | null
+          name: string
+          start_date?: string | null
+        }
+        Update: {
+          budget?: number | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          location?: string | null
+          name?: string
+          start_date?: string | null
+        }
+        Relationships: []
+      }
+      qualification_documents: {
+        Row: {
+          document_type: string
+          document_url: string
+          expiry_date: string | null
+          id: string
+          subcontractor_id: string | null
+          uploaded_at: string
+        }
+        Insert: {
+          document_type: string
+          document_url: string
+          expiry_date?: string | null
+          id?: string
+          subcontractor_id?: string | null
+          uploaded_at?: string
+        }
+        Update: {
+          document_type?: string
+          document_url?: string
+          expiry_date?: string | null
+          id?: string
+          subcontractor_id?: string | null
+          uploaded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "qualification_documents_subcontractor_id_fkey"
+            columns: ["subcontractor_id"]
+            isOneToOne: false
+            referencedRelation: "subcontractors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subcontractors: {
+        Row: {
+          aggregate_limit: number | null
+          company_logo: string | null
+          company_name: string | null
+          email: string
+          has_paid: boolean
+          id: string
+          invited_at: string
+          invited_by: string
+          last_submission_date: string | null
+          name: string | null
+          qualification_status: string
+          single_project_limit: number | null
+          submission_status: string
+          trade: string | null
+          user_id: string | null
+        }
+        Insert: {
+          aggregate_limit?: number | null
+          company_logo?: string | null
+          company_name?: string | null
+          email: string
+          has_paid?: boolean
+          id?: string
+          invited_at?: string
+          invited_by: string
+          last_submission_date?: string | null
+          name?: string | null
+          qualification_status?: string
+          single_project_limit?: number | null
+          submission_status?: string
+          trade?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          aggregate_limit?: number | null
+          company_logo?: string | null
+          company_name?: string | null
+          email?: string
+          has_paid?: boolean
+          id?: string
+          invited_at?: string
+          invited_by?: string
+          last_submission_date?: string | null
+          name?: string | null
+          qualification_status?: string
+          single_project_limit?: number | null
+          submission_status?: string
+          trade?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
