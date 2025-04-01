@@ -2,7 +2,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { User, UserRole } from "../types";
 import { supabase } from "@/integrations/supabase/client";
-import { useNavigate } from "react-router-dom";
 import { toast } from "@/components/ui/use-toast";
 
 interface AuthContextType {
@@ -58,6 +57,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Fetch user profile data from profiles table
   const fetchUserProfile = async (userId: string) => {
     try {
+      // Use type assertion to inform TypeScript about the structure
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -117,7 +117,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         // Check if role matches
-        if (profileData.role !== role) {
+        if (profileData && profileData.role !== role) {
           await supabase.auth.signOut();
           toast({
             title: "Access denied",
@@ -128,16 +128,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return null;
         }
 
-        const user: User = {
-          id: profileData.id,
-          email: profileData.email,
-          name: profileData.name,
-          role: profileData.role as UserRole,
-          companyName: profileData.company_name || '',
-          createdAt: new Date(profileData.created_at)
-        };
-        setCurrentUser(user);
-        return user;
+        if (profileData) {
+          const user: User = {
+            id: profileData.id,
+            email: profileData.email,
+            name: profileData.name,
+            role: profileData.role as UserRole,
+            companyName: profileData.company_name || '',
+            createdAt: new Date(profileData.created_at)
+          };
+          setCurrentUser(user);
+          return user;
+        }
       }
       return null;
     } catch (error) {
