@@ -235,6 +235,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           description: "Your account has been created successfully."
         });
         
+        // Send email verification if the user was created successfully
+        if (data.user.email) {
+          await sendEmailVerification();
+          toast({
+            title: "Verification email sent",
+            description: "Please check your email to verify your account."
+          });
+        }
+        
         return user;
       }
       return null;

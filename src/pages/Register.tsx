@@ -9,12 +9,12 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { UserRole } from "@/types";
 import { toast } from "@/components/ui/use-toast";
-import { AlertCircle, BadgeCheck } from "lucide-react";
+import { AlertCircle, BadgeCheck, Mail } from "lucide-react";
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { register, isAuthenticated, currentUser } = useAuth();
+  const { register, isAuthenticated, currentUser, sendEmailVerification } = useAuth();
   
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -25,6 +25,7 @@ const Register: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [invitationData, setInvitationData] = useState<any>(null);
+  const [showVerificationBanner, setShowVerificationBanner] = useState(false);
   
   // Parse URL query params for invitation data
   useEffect(() => {
@@ -53,7 +54,9 @@ const Register: React.FC = () => {
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated && currentUser) {
-      if (currentUser.role === "general-contractor") {
+      if (!currentUser.emailVerified) {
+        setShowVerificationBanner(true);
+      } else if (currentUser.role === "general-contractor") {
         navigate("/dashboard");
       } else {
         navigate("/sub-dashboard");
@@ -100,7 +103,7 @@ const Register: React.FC = () => {
             title: "Registration successful",
             description: "Your account has been created successfully."
           });
-          navigate("/sub-dashboard");
+          setShowVerificationBanner(true);
         }
       } else {
         // Regular registration
@@ -112,11 +115,7 @@ const Register: React.FC = () => {
             description: "Your account has been created successfully."
           });
           
-          if (user.role === "general-contractor") {
-            navigate("/dashboard");
-          } else {
-            navigate("/sub-dashboard");
-          }
+          setShowVerificationBanner(true);
         }
       }
     } catch (err: any) {
@@ -126,6 +125,64 @@ const Register: React.FC = () => {
       setLoading(false);
     }
   };
+  
+  const handleResendVerification = async () => {
+    const success = await sendEmailVerification();
+    if (success) {
+      toast({
+        title: "Email sent",
+        description: "Verification email has been resent to your email address."
+      });
+    }
+  };
+
+  if (showVerificationBanner && currentUser) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-qualifind-blue to-qualifind-dark p-4">
+        <div className="w-full max-w-md">
+          <Card>
+            <CardHeader>
+              <CardTitle>Verify your email</CardTitle>
+              <CardDescription>
+                Please check your email and click the verification link to activate your account.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="p-4 bg-blue-50 text-blue-700 rounded-md flex items-center space-x-3">
+                <Mail className="h-5 w-5" />
+                <div>
+                  <p className="font-medium">Verification email sent</p>
+                  <p className="text-sm">We've sent a verification email to {currentUser.email}</p>
+                </div>
+              </div>
+              
+              <div className="text-center space-y-3">
+                <p className="text-sm text-gray-600">
+                  Didn't receive an email? Check your spam folder or click below to resend.
+                </p>
+                <Button 
+                  variant="outline" 
+                  onClick={handleResendVerification}
+                >
+                  Resend verification email
+                </Button>
+              </div>
+            </CardContent>
+            <CardFooter className="flex-col space-y-4">
+              <Button 
+                variant="link"
+                onClick={() => {
+                  navigate(currentUser.role === "general-contractor" ? "/dashboard" : "/sub-dashboard");
+                }}
+              >
+                Continue to dashboard
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-qualifind-blue to-qualifind-dark p-4">
