@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { UserRole } from "@/types";
 import { toast } from "@/components/ui/use-toast";
-import { AlertCircle, BadgeCheck, Mail } from "lucide-react";
+import { AlertCircle, BadgeCheck, Mail, Eye, EyeOff } from "lucide-react";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
@@ -25,6 +26,8 @@ const Register: React.FC = () => {
   const [error, setError] = useState("");
   const [invitationData, setInvitationData] = useState<any>(null);
   const [showVerificationBanner, setShowVerificationBanner] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
   useEffect(() => {
     const queryParams = new URLSearchParams(location.search);
@@ -60,26 +63,35 @@ const Register: React.FC = () => {
       }
     }
   }, [isAuthenticated, currentUser, navigate]);
+
+  const validatePassword = (password: string): string => {
+    if (password.length < 6) {
+      return "Password must be at least 6 characters";
+    }
+    return "";
+  };
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    
+    // Validate password
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      setError(passwordError);
+      toast({
+        title: "Password error",
+        description: passwordError,
+        variant: "destructive"
+      });
+      return;
+    }
     
     if (password !== confirmPassword) {
       setError("Passwords do not match");
       toast({
         title: "Password error",
         description: "Passwords do not match. Please try again.",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters");
-      toast({
-        title: "Password too short",
-        description: "Password must be at least 6 characters long.",
         variant: "destructive"
       });
       return;
@@ -126,6 +138,8 @@ const Register: React.FC = () => {
         if (user) {
           console.log("User registered successfully:", user);
           setShowVerificationBanner(true);
+        } else {
+          console.error("Registration failed: user is null");
         }
       }
     } catch (err: any) {
@@ -217,10 +231,11 @@ const Register: React.FC = () => {
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
               {error && (
-                <div className="flex items-center gap-2 bg-red-50 text-red-600 p-3 rounded-md text-sm">
-                  <AlertCircle size={16} />
-                  <span>{error}</span>
-                </div>
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Error</AlertTitle>
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
               )}
               
               <div className="space-y-2">
@@ -260,26 +275,47 @@ const Register: React.FC = () => {
               
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  placeholder="••••••••"
-                />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    placeholder="••••••••"
+                    className="pr-10"
+                  />
+                  <button 
+                    type="button" 
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2" 
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500">Password must be at least 6 characters</p>
               </div>
               
               <div className="space-y-2">
                 <Label htmlFor="confirm-password">Confirm Password</Label>
-                <Input
-                  id="confirm-password"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                  placeholder="••••••••"
-                />
+                <div className="relative">
+                  <Input
+                    id="confirm-password"
+                    type={showConfirmPassword ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    placeholder="••••••••"
+                    className="pr-10"
+                  />
+                  <button 
+                    type="button" 
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2" 
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  >
+                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
               
               {!invitationData && (

@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { User, UserRole } from "../types";
 import { supabase } from "@/integrations/supabase/client";
@@ -39,8 +40,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        console.log("Auth state changed:", event, session?.user?.id);
         if (session && session.user) {
           fetchUserProfile(session.user.id);
         } else {
@@ -50,7 +53,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     );
 
+    // Check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log("Checking existing session:", session?.user?.id);
       if (session && session.user) {
         fetchUserProfile(session.user.id);
       } else {
@@ -65,6 +70,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchUserProfile = async (userId: string) => {
     try {
+      console.log("Fetching user profile for:", userId);
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -77,6 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data) {
+        console.log("User profile fetched:", data);
         const user: User = {
           id: data.id,
           email: data.email,
@@ -88,9 +95,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           lastSignIn: data.last_sign_in ? new Date(data.last_sign_in) : undefined
         };
         setCurrentUser(user);
+      } else {
+        console.warn("No profile found for user:", userId);
+        setCurrentUser(null);
       }
     } catch (error) {
       console.error("Error fetching user profile:", error);
+      setCurrentUser(null);
     } finally {
       setLoading(false);
     }
@@ -172,6 +183,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log("Registration data:", { email, name, companyName, role });
       
+      // First create the user in Supabase auth
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -186,15 +198,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error("Registration error details:", error);
-        toast({
-          title: "Registration failed",
-          description: error.message,
-          variant: "destructive"
-        });
+        
+        // Handle specific error cases
+        if (error.message.includes('already registered')) {
+          toast({
+            title: "Email already registered",
+            description: "This email address is already in use. Please login instead.",
+            variant: "destructive"
+          });
+        } else {
+          toast({
+            title: "Registration failed",
+            description: error.message || "There was a problem creating your account",
+            variant: "destructive"
+          });
+        }
         return null;
       }
 
       if (!data.user) {
+        console.error("No user data returned from sign up");
         toast({
           title: "Registration failed",
           description: "No user data returned",
@@ -203,10 +226,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return null;
       }
 
-      console.log("Supabase registration response:", data);
+      console.log("Auth sign up successful:", data);
 
+      // Process invitation if it exists
       if (invitationCode && role === 'subcontractor') {
         try {
+          console.log("Processing invitation code:", invitationCode);
           const { error: inviteError } = await supabase
             .rpc('verify_invitation_code', { code_param: invitationCode })
             .single();
@@ -221,6 +246,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             
             if (updateError) {
               console.error("Error updating invitation:", updateError);
+            } else {
+              console.log("Invitation accepted successfully");
             }
           }
         } catch (inviteProcessError) {
@@ -228,6 +255,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
+      // Create user object
       const user: User = {
         id: data.user.id,
         email: data.user.email || email,
@@ -238,6 +266,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         emailVerified: false,
         lastSignIn: undefined
       };
+      
       setCurrentUser(user);
       
       toast({
@@ -245,6 +274,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         description: "Your account has been created successfully."
       });
       
+      // Send verification email
       if (data.user.email) {
         await sendEmailVerification();
         toast({
