@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -27,7 +26,6 @@ const Register: React.FC = () => {
   const [invitationData, setInvitationData] = useState<any>(null);
   const [showVerificationBanner, setShowVerificationBanner] = useState(false);
   
-  // Parse URL query params for invitation data
   useEffect(() => {
     const queryParams = new URLSearchParams(location.search);
     const emailParam = queryParams.get('email');
@@ -51,7 +49,6 @@ const Register: React.FC = () => {
     }
   }, [location.search]);
   
-  // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated && currentUser) {
       if (!currentUser.emailVerified) {
@@ -69,13 +66,33 @@ const Register: React.FC = () => {
     setError("");
     
     if (password !== confirmPassword) {
-      return setError("Passwords do not match");
+      setError("Passwords do not match");
+      toast({
+        title: "Password error",
+        description: "Passwords do not match. Please try again.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters");
+      toast({
+        title: "Password too short",
+        description: "Password must be at least 6 characters long.",
+        variant: "destructive"
+      });
+      return;
     }
     
     setLoading(true);
     
     try {
-      // If registering with an invitation
+      console.log("Submitting registration form:", { 
+        email, name, companyName, 
+        role: invitationData ? 'subcontractor' : role 
+      });
+      
       if (invitationData) {
         const userData = {
           email,
@@ -87,6 +104,7 @@ const Register: React.FC = () => {
           invitationCode: invitationData.code
         };
 
+        console.log("Registering with invitation:", userData);
         const user = await register(
           userData.email, 
           userData.password, 
@@ -98,29 +116,21 @@ const Register: React.FC = () => {
         );
 
         if (user) {
+          console.log("User registered successfully with invitation:", user);
           localStorage.removeItem('invitationData'); // Clear invitation data
-          toast({
-            title: "Registration successful",
-            description: "Your account has been created successfully."
-          });
           setShowVerificationBanner(true);
         }
       } else {
-        // Regular registration
         const user = await register(email, password, name, companyName, role);
         
         if (user) {
-          toast({
-            title: "Registration successful",
-            description: "Your account has been created successfully."
-          });
-          
+          console.log("User registered successfully:", user);
           setShowVerificationBanner(true);
         }
       }
     } catch (err: any) {
+      console.error("Registration submission error:", err);
       setError(err.message || "Failed to create account");
-      console.error(err);
     } finally {
       setLoading(false);
     }

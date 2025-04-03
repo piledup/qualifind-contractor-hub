@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { User, UserRole } from "../types";
 import { supabase } from "@/integrations/supabase/client";
@@ -39,7 +38,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Initialize auth on mount
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
@@ -52,7 +50,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     );
 
-    // Check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session && session.user) {
         fetchUserProfile(session.user.id);
@@ -66,7 +63,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  // Fetch user profile data from profiles table
   const fetchUserProfile = async (userId: string) => {
     try {
       const { data, error } = await supabase
@@ -76,6 +72,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .single();
 
       if (error) {
+        console.error("Error fetching user profile:", error);
         throw error;
       }
 
@@ -99,7 +96,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Login with email and password
   const login = async (email: string, password: string, role: UserRole): Promise<User | null> => {
     setLoading(true);
     try {
@@ -118,7 +114,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data.user) {
-        // Fetch user profile to get role
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .select('*')
@@ -129,7 +124,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           throw profileError;
         }
 
-        // Check if role matches
         if (profileData && profileData.role !== role) {
           await supabase.auth.signOut();
           toast({
@@ -165,7 +159,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Register new user
   const register = async (
     email: string, 
     password: string, 
@@ -177,6 +170,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ): Promise<User | null> => {
     setLoading(true);
     try {
+      console.log("Registration data:", { email, name, companyName, role });
+      
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -190,23 +185,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (error) {
+        console.error("Registration error details:", error);
         toast({
           title: "Registration failed",
           description: error.message,
           variant: "destructive"
         });
-        throw error;
+        return null;
       }
 
-      if (data.user) {
-        // If registration came from invitation, update invitation status
-        if (invitationCode && role === 'subcontractor') {
+      if (!data.user) {
+        toast({
+          title: "Registration failed",
+          description: "No user data returned",
+          variant: "destructive"
+        });
+        return null;
+      }
+
+      console.log("Supabase registration response:", data);
+
+      if (invitationCode && role === 'subcontractor') {
+        try {
           const { error: inviteError } = await supabase
             .rpc('verify_invitation_code', { code_param: invitationCode })
             .single();
 
-          if (!inviteError) {
-            // Update the invitation status
+          if (inviteError) {
+            console.error("Invitation verification error:", inviteError);
+          } else {
             const { error: updateError } = await supabase
               .from('invitations')
               .update({ status: 'accepted' })
@@ -216,46 +223,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               console.error("Error updating invitation:", updateError);
             }
           }
+        } catch (inviteProcessError) {
+          console.error("Error processing invitation:", inviteProcessError);
         }
-
-        const user: User = {
-          id: data.user.id,
-          email: data.user.email || email,
-          name,
-          role,
-          companyName,
-          createdAt: new Date(),
-          emailVerified: false,
-          lastSignIn: undefined
-        };
-        setCurrentUser(user);
-        
-        toast({
-          title: "Registration successful",
-          description: "Your account has been created successfully."
-        });
-        
-        // Send email verification if the user was created successfully
-        if (data.user.email) {
-          await sendEmailVerification();
-          toast({
-            title: "Verification email sent",
-            description: "Please check your email to verify your account."
-          });
-        }
-        
-        return user;
       }
-      return null;
-    } catch (error) {
+
+      const user: User = {
+        id: data.user.id,
+        email: data.user.email || email,
+        name,
+        role,
+        companyName,
+        createdAt: new Date(),
+        emailVerified: false,
+        lastSignIn: undefined
+      };
+      setCurrentUser(user);
+      
+      toast({
+        title: "Registration successful",
+        description: "Your account has been created successfully."
+      });
+      
+      if (data.user.email) {
+        await sendEmailVerification();
+        toast({
+          title: "Verification email sent",
+          description: "Please check your email to verify your account."
+        });
+      }
+      
+      return user;
+    } catch (error: any) {
       console.error("Registration error:", error);
+      toast({
+        title: "Registration failed",
+        description: error.message || "An unexpected error occurred",
+        variant: "destructive"
+      });
       return null;
     } finally {
       setLoading(false);
     }
   };
 
-  // Send password reset email
   const resetPassword = async (email: string): Promise<boolean> => {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -282,7 +293,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Update password
   const updatePassword = async (password: string): Promise<boolean> => {
     try {
       const { error } = await supabase.auth.updateUser({
@@ -309,7 +319,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Send email verification
   const sendEmailVerification = async (): Promise<boolean> => {
     if (!currentUser) {
       return false;
@@ -341,7 +350,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Check if user has specific permission
   const hasPermission = async (permissionName: string): Promise<boolean> => {
     if (!currentUser) {
       return false;
@@ -366,7 +374,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Logout user
   const logout = async () => {
     try {
       await supabase.auth.signOut();
