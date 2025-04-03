@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { User, UserRole } from "../types";
 import { supabase } from "@/integrations/supabase/client";
@@ -206,14 +207,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             variant: "destructive"
           });
         } else if (error.message.includes('Database error')) {
-          // Special case for database errors - we'll try to create the profile manually
           toast({
             title: "Database error encountered",
             description: "We're experiencing technical difficulties. Trying alternate registration method...",
             variant: "destructive"
           });
-          
-          // Continue with the rest of the function - we'll handle manual profile creation below
         } else {
           toast({
             title: "Registration failed",
@@ -228,10 +226,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.error("No user data returned from sign up");
         toast({
           title: "Registration failed",
-          description: "No user data returned",
+          description: "Unable to create user account. Please try again later.",
           variant: "destructive"
         });
-        throw new Error("No user data returned from registration");
+        return null;
       }
 
       console.log("Auth sign up successful:", data);
@@ -268,49 +266,74 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // Try to fetch the user profile
       let profileData = null;
-      try {
-        const { data: fetchedProfile, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', data.user.id)
-          .maybeSingle();
-        
-        if (profileError) {
-          console.error("Error fetching profile after registration:", profileError);
-        } else if (fetchedProfile) {
-          console.log("Successfully fetched profile after registration:", fetchedProfile);
-          profileData = fetchedProfile;
-        } else {
-          console.warn("No profile found after registration, creating manually");
+      let attempts = 0;
+      const maxAttempts = 3;
+      
+      while (!profileData && attempts < maxAttempts) {
+        attempts++;
+        try {
+          console.log(`Attempt ${attempts} to fetch profile for user: ${data.user.id}`);
           
-          // If no profile exists, create one manually
-          const { data: insertedProfile, error: insertError } = await supabase
+          const { data: fetchedProfile, error: profileError } = await supabase
             .from('profiles')
-            .insert({
-              id: data.user.id,
-              email: data.user.email || email,
-              name,
-              role,
-              company_name: companyName,
-              email_verified: false
-            })
-            .select()
-            .single();
+            .select('*')
+            .eq('id', data.user.id)
+            .maybeSingle();
           
-          if (insertError) {
-            console.error("Error manually creating profile:", insertError);
-            toast({
-              title: "Profile creation failed",
-              description: "We couldn't create your user profile. Please contact support.",
-              variant: "destructive"
-            });
+          if (profileError) {
+            console.error("Error fetching profile after registration:", profileError);
+          } else if (fetchedProfile) {
+            console.log("Successfully fetched profile after registration:", fetchedProfile);
+            profileData = fetchedProfile;
+            break;
           } else {
-            console.log("Profile created manually after registration:", insertedProfile);
-            profileData = insertedProfile;
+            console.warn(`No profile found after registration attempt ${attempts}, may need to create manually`);
+            
+            // If it's the last attempt, try to create the profile manually
+            if (attempts === maxAttempts) {
+              console.log("Creating profile manually as last resort");
+              
+              // If no profile exists, create one manually
+              const { data: insertedProfile, error: insertError } = await supabase
+                .from('profiles')
+                .insert({
+                  id: data.user.id,
+                  email: data.user.email || email,
+                  name,
+                  role,
+                  company_name: companyName,
+                  email_verified: false
+                })
+                .select()
+                .single();
+              
+              if (insertError) {
+                console.error("Error manually creating profile:", insertError);
+                toast({
+                  title: "Profile creation failed",
+                  description: "We couldn't create your user profile. Please contact support.",
+                  variant: "destructive"
+                });
+              } else {
+                console.log("Profile created manually after registration:", insertedProfile);
+                profileData = insertedProfile;
+              }
+            } else {
+              // Wait before trying again
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
           }
+        } catch (profileFetchError) {
+          console.error("Error in profile fetch/creation process:", profileFetchError);
+          
+          // If it's the last attempt, try the fallback
+          if (attempts === maxAttempts) {
+            break;
+          }
+          
+          // Wait before trying again
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
-      } catch (profileFetchError) {
-        console.error("Error in profile fetch/creation process:", profileFetchError);
       }
 
       // Create user object
@@ -326,6 +349,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           emailVerified: profileData.email_verified || false,
           lastSignIn: profileData.last_sign_in ? new Date(profileData.last_sign_in) : undefined
         };
+        setCurrentUser(user);
       } else {
         // Fallback if we couldn't get the profile
         user = {
@@ -338,9 +362,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           emailVerified: false,
           lastSignIn: undefined
         };
+        setCurrentUser(user);
+        
+        // Try one more time to create the profile asynchronously
+        setTimeout(async () => {
+          try {
+            const { error: lastInsertError } = await supabase
+              .from('profiles')
+              .insert({
+                id: data.user.id,
+                email: data.user.email || email,
+                name,
+                role,
+                company_name: companyName,
+                email_verified: false
+              });
+              
+            if (lastInsertError) {
+              console.error("Final attempt to create profile failed:", lastInsertError);
+            } else {
+              console.log("Profile created in final async attempt");
+            }
+          } catch (finalError) {
+            console.error("Final profile creation attempt error:", finalError);
+          }
+        }, 0);
       }
-      
-      setCurrentUser(user);
       
       toast({
         title: "Registration successful",
@@ -364,7 +411,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         description: error.message || "An unexpected error occurred",
         variant: "destructive"
       });
-      throw error; // Rethrow for the component to handle
+      return null;
     } finally {
       setLoading(false);
     }

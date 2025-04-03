@@ -141,6 +141,14 @@ const Register: React.FC = () => {
             title: "Registration successful",
             description: "Your account has been created successfully.",
           });
+        } else {
+          setRegisterError("Unable to complete registration. Please try again later.");
+          
+          toast({
+            title: "Registration Error",
+            description: "Unable to complete registration. Please try again later.",
+            variant: "destructive"
+          });
         }
       } else {
         const user = await registerUser(
@@ -161,6 +169,12 @@ const Register: React.FC = () => {
           });
         } else {
           setRegisterError("Registration failed. Please try again or contact support.");
+          
+          toast({
+            title: "Registration Error",
+            description: "Registration failed. Please try again or contact support.",
+            variant: "destructive"
+          });
         }
       }
     } catch (err: any) {
