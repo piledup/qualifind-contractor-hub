@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { User, UserRole } from "../types";
 import { supabase } from "@/integrations/supabase/client";
@@ -206,24 +205,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             description: "This email address is already in use. Please login instead.",
             variant: "destructive"
           });
+        } else if (error.message.includes('Database error')) {
+          // Special case for database errors - we'll try to create the profile manually
+          toast({
+            title: "Database error encountered",
+            description: "We're experiencing technical difficulties. Trying alternate registration method...",
+            variant: "destructive"
+          });
+          
+          // Continue with the rest of the function - we'll handle manual profile creation below
         } else {
           toast({
             title: "Registration failed",
             description: error.message || "There was a problem creating your account",
             variant: "destructive"
           });
+          throw error;
         }
-        return null;
       }
 
-      if (!data.user) {
+      if (!data || !data.user) {
         console.error("No user data returned from sign up");
         toast({
           title: "Registration failed",
           description: "No user data returned",
           variant: "destructive"
         });
-        return null;
+        throw new Error("No user data returned from registration");
       }
 
       console.log("Auth sign up successful:", data);
@@ -256,11 +264,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // Now wait briefly to ensure the trigger has time to create the profile
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Try to fetch the user profile
+      let profileData = null;
       try {
-        const { data: profileData, error: profileError } = await supabase
+        const { data: fetchedProfile, error: profileError } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', data.user.id)
@@ -268,13 +277,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         if (profileError) {
           console.error("Error fetching profile after registration:", profileError);
-        } else if (profileData) {
-          console.log("Successfully fetched profile after registration:", profileData);
+        } else if (fetchedProfile) {
+          console.log("Successfully fetched profile after registration:", fetchedProfile);
+          profileData = fetchedProfile;
         } else {
-          console.warn("No profile found after registration, might need to create manually");
+          console.warn("No profile found after registration, creating manually");
           
-          // If no profile exists, try to create one manually
-          const { error: insertError } = await supabase
+          // If no profile exists, create one manually
+          const { data: insertedProfile, error: insertError } = await supabase
             .from('profiles')
             .insert({
               id: data.user.id,
@@ -283,12 +293,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               role,
               company_name: companyName,
               email_verified: false
-            });
+            })
+            .select()
+            .single();
           
           if (insertError) {
             console.error("Error manually creating profile:", insertError);
+            toast({
+              title: "Profile creation failed",
+              description: "We couldn't create your user profile. Please contact support.",
+              variant: "destructive"
+            });
           } else {
-            console.log("Profile created manually after registration");
+            console.log("Profile created manually after registration:", insertedProfile);
+            profileData = insertedProfile;
           }
         }
       } catch (profileFetchError) {
@@ -296,16 +314,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // Create user object
-      const user: User = {
-        id: data.user.id,
-        email: data.user.email || email,
-        name,
-        role,
-        companyName,
-        createdAt: new Date(),
-        emailVerified: false,
-        lastSignIn: undefined
-      };
+      let user: User | null = null;
+      if (profileData) {
+        user = {
+          id: profileData.id,
+          email: profileData.email,
+          name: profileData.name,
+          role: profileData.role as UserRole,
+          companyName: profileData.company_name || '',
+          createdAt: new Date(profileData.created_at),
+          emailVerified: profileData.email_verified || false,
+          lastSignIn: profileData.last_sign_in ? new Date(profileData.last_sign_in) : undefined
+        };
+      } else {
+        // Fallback if we couldn't get the profile
+        user = {
+          id: data.user.id,
+          email: data.user.email || email,
+          name,
+          role,
+          companyName,
+          createdAt: new Date(),
+          emailVerified: false,
+          lastSignIn: undefined
+        };
+      }
       
       setCurrentUser(user);
       
@@ -331,7 +364,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         description: error.message || "An unexpected error occurred",
         variant: "destructive"
       });
-      return null;
+      throw error; // Rethrow for the component to handle
     } finally {
       setLoading(false);
     }

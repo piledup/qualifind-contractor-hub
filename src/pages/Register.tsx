@@ -48,6 +48,7 @@ const Register: React.FC = () => {
   const [showVerificationBanner, setShowVerificationBanner] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [registerError, setRegisterError] = useState<string | null>(null);
   
   // Initialize the form
   const form = useForm<RegisterFormValues>({
@@ -99,6 +100,7 @@ const Register: React.FC = () => {
   
   const onSubmit = async (formData: RegisterFormValues) => {
     setLoading(true);
+    setRegisterError(null);
     
     try {
       console.log("Submitting registration form:", { 
@@ -134,6 +136,11 @@ const Register: React.FC = () => {
           console.log("User registered successfully with invitation:", user);
           localStorage.removeItem('invitationData'); // Clear invitation data
           setShowVerificationBanner(true);
+          
+          toast({
+            title: "Registration successful",
+            description: "Your account has been created successfully.",
+          });
         }
       } else {
         const user = await registerUser(
@@ -147,12 +154,19 @@ const Register: React.FC = () => {
         if (user) {
           console.log("User registered successfully:", user);
           setShowVerificationBanner(true);
+          
+          toast({
+            title: "Registration successful",
+            description: "Your account has been created successfully.",
+          });
         } else {
-          console.error("Registration failed: user is null");
+          setRegisterError("Registration failed. Please try again or contact support.");
         }
       }
     } catch (err: any) {
       console.error("Registration submission error:", err);
+      setRegisterError(err.message || "Failed to create account. Please try again.");
+      
       toast({
         title: "Registration Error",
         description: err.message || "Failed to create account. Please try again.",
@@ -241,6 +255,18 @@ const Register: React.FC = () => {
               </CardDescription>
             )}
           </CardHeader>
+          
+          {registerError && (
+            <div className="px-6">
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Registration Error</AlertTitle>
+                <AlertDescription>
+                  {registerError}
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
           
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)}>
