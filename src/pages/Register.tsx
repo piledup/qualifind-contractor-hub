@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -8,26 +9,58 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { UserRole } from "@/types";
 import { toast } from "@/components/ui/use-toast";
-import { AlertCircle, BadgeCheck, Mail, Eye, EyeOff } from "lucide-react";
+import { AlertCircle, BadgeCheck, Mail, Eye, EyeOff, Loader2 } from "lucide-react";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { 
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+
+// Form schema with validation
+const registerSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters"),
+  companyName: z.string().min(1, "Company name is required"),
+  email: z.string().email("Please enter a valid email"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  confirmPassword: z.string(),
+  role: z.enum(["general-contractor", "subcontractor"])
+}).refine(data => data.password === data.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"]
+});
+
+type RegisterFormValues = z.infer<typeof registerSchema>;
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { register, isAuthenticated, currentUser, sendEmailVerification } = useAuth();
+  const { register: registerUser, isAuthenticated, currentUser, sendEmailVerification } = useAuth();
   
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [companyName, setCompanyName] = useState("");
-  const [role, setRole] = useState<UserRole>("general-contractor");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const [invitationData, setInvitationData] = useState<any>(null);
   const [showVerificationBanner, setShowVerificationBanner] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  
+  // Initialize the form
+  const form = useForm<RegisterFormValues>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: {
+      name: "",
+      companyName: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
+      role: "general-contractor" as UserRole,
+    },
+  });
   
   useEffect(() => {
     const queryParams = new URLSearchParams(location.search);
@@ -35,7 +68,7 @@ const Register: React.FC = () => {
     const isInvited = queryParams.get('invited') === 'true';
 
     if (emailParam) {
-      setEmail(emailParam);
+      form.setValue('email', emailParam);
     }
 
     if (isInvited) {
@@ -44,13 +77,13 @@ const Register: React.FC = () => {
         try {
           const parsedData = JSON.parse(storedInvitationData);
           setInvitationData(parsedData);
-          setRole('subcontractor'); // Invited users are always subcontractors
+          form.setValue('role', 'subcontractor');
         } catch (e) {
           console.error("Error parsing invitation data", e);
         }
       }
     }
-  }, [location.search]);
+  }, [location.search, form]);
   
   useEffect(() => {
     if (isAuthenticated && currentUser) {
@@ -63,61 +96,31 @@ const Register: React.FC = () => {
       }
     }
   }, [isAuthenticated, currentUser, navigate]);
-
-  const validatePassword = (password: string): string => {
-    if (password.length < 6) {
-      return "Password must be at least 6 characters";
-    }
-    return "";
-  };
   
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    
-    // Validate password
-    const passwordError = validatePassword(password);
-    if (passwordError) {
-      setError(passwordError);
-      toast({
-        title: "Password error",
-        description: passwordError,
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      toast({
-        title: "Password error",
-        description: "Passwords do not match. Please try again.",
-        variant: "destructive"
-      });
-      return;
-    }
-    
+  const onSubmit = async (formData: RegisterFormValues) => {
     setLoading(true);
     
     try {
       console.log("Submitting registration form:", { 
-        email, name, companyName, 
-        role: invitationData ? 'subcontractor' : role 
+        email: formData.email, 
+        name: formData.name, 
+        companyName: formData.companyName, 
+        role: invitationData ? 'subcontractor' as UserRole : formData.role 
       });
       
       if (invitationData) {
         const userData = {
-          email,
-          password,
-          name,
-          companyName,
+          email: formData.email,
+          password: formData.password,
+          name: formData.name,
+          companyName: formData.companyName,
           role: 'subcontractor' as UserRole, // Force role to be subcontractor
           invitedBy: invitationData.generalContractorId,
           invitationCode: invitationData.code
         };
 
         console.log("Registering with invitation:", userData);
-        const user = await register(
+        const user = await registerUser(
           userData.email, 
           userData.password, 
           userData.name, 
@@ -133,7 +136,13 @@ const Register: React.FC = () => {
           setShowVerificationBanner(true);
         }
       } else {
-        const user = await register(email, password, name, companyName, role);
+        const user = await registerUser(
+          formData.email, 
+          formData.password, 
+          formData.name, 
+          formData.companyName, 
+          formData.role
+        );
         
         if (user) {
           console.log("User registered successfully:", user);
@@ -144,7 +153,11 @@ const Register: React.FC = () => {
       }
     } catch (err: any) {
       console.error("Registration submission error:", err);
-      setError(err.message || "Failed to create account");
+      toast({
+        title: "Registration Error",
+        description: err.message || "Failed to create account. Please try again.",
+        variant: "destructive"
+      });
     } finally {
       setLoading(false);
     }
@@ -228,141 +241,182 @@ const Register: React.FC = () => {
               </CardDescription>
             )}
           </CardHeader>
-          <form onSubmit={handleSubmit}>
-            <CardContent className="space-y-4">
-              {error && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>Error</AlertTitle>
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-              
-              <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                  placeholder="John Smith"
+          
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)}>
+              <CardContent className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Full Name</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="John Smith" 
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="company">Company Name</Label>
-                <Input
-                  id="company"
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                  required
-                  placeholder="ABC Construction"
+                
+                <FormField
+                  control={form.control}
+                  name="companyName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Company Name</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="ABC Construction" 
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  placeholder="email@company.com"
-                  disabled={!!invitationData}
+                
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="email" 
+                          placeholder="email@company.com" 
+                          {...field}
+                          disabled={!!invitationData}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    placeholder="••••••••"
-                    className="pr-10"
+                
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Password</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Input
+                            type={showPassword ? "text" : "password"}
+                            placeholder="••••••••"
+                            className="pr-10"
+                            {...field}
+                          />
+                          <button 
+                            type="button" 
+                            className="absolute right-2 top-1/2 transform -translate-y-1/2" 
+                            onClick={() => setShowPassword(!showPassword)}
+                          >
+                            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                          </button>
+                        </div>
+                      </FormControl>
+                      <p className="text-xs text-gray-500">Password must be at least 6 characters</p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="confirmPassword"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Confirm Password</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Input
+                            type={showConfirmPassword ? "text" : "password"}
+                            placeholder="••••••••"
+                            className="pr-10"
+                            {...field}
+                          />
+                          <button 
+                            type="button" 
+                            className="absolute right-2 top-1/2 transform -translate-y-1/2" 
+                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          >
+                            {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                          </button>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                {!invitationData && (
+                  <FormField
+                    control={form.control}
+                    name="role"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Account Type</FormLabel>
+                        <FormControl>
+                          <RadioGroup 
+                            onValueChange={field.onChange} 
+                            value={field.value}
+                            className="flex space-x-4"
+                          >
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="general-contractor" id="gc" />
+                              <Label htmlFor="gc" className="cursor-pointer">General Contractor</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="subcontractor" id="sub" />
+                              <Label htmlFor="sub" className="cursor-pointer">Subcontractor</Label>
+                            </div>
+                          </RadioGroup>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                  <button 
-                    type="button" 
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2" 
-                    onClick={() => setShowPassword(!showPassword)}
-                  >
-                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
-                <p className="text-xs text-gray-500">Password must be at least 6 characters</p>
-              </div>
+                )}
+              </CardContent>
               
-              <div className="space-y-2">
-                <Label htmlFor="confirm-password">Confirm Password</Label>
-                <div className="relative">
-                  <Input
-                    id="confirm-password"
-                    type={showConfirmPassword ? "text" : "password"}
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                    placeholder="••••••••"
-                    className="pr-10"
-                  />
-                  <button 
-                    type="button" 
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2" 
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  >
-                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
-              </div>
-              
-              {!invitationData && (
-                <div className="space-y-2">
-                  <Label>Account Type</Label>
-                  <RadioGroup 
-                    value={role} 
-                    onValueChange={(val) => setRole(val as UserRole)}
-                    className="flex space-x-4"
-                  >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="general-contractor" id="gc" />
-                      <Label htmlFor="gc" className="cursor-pointer">General Contractor</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="subcontractor" id="sub" />
-                      <Label htmlFor="sub" className="cursor-pointer">Subcontractor</Label>
-                    </div>
-                  </RadioGroup>
-                </div>
-              )}
-            </CardContent>
-            
-            <CardFooter className="flex-col space-y-4">
-              <Button 
-                type="submit" 
-                className="w-full bg-qualifind-blue hover:bg-qualifind-blue/90"
-                disabled={loading}
-              >
-                {loading ? "Creating account..." : "Register"}
-              </Button>
-              
-              <p className="text-sm text-center text-gray-600">
-                Already have an account?{" "}
-                <Link to="/login" className="text-qualifind-orange hover:underline">
-                  Sign in
-                </Link>
-              </p>
-              {!invitationData && (
-                <p className="text-sm text-center text-gray-500">
-                  <Link to="/invitation" className="hover:underline">
-                    Have an invitation code?
+              <CardFooter className="flex-col space-y-4">
+                <Button 
+                  type="submit" 
+                  className="w-full bg-qualifind-blue hover:bg-qualifind-blue/90"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating account...
+                    </>
+                  ) : (
+                    "Register"
+                  )}
+                </Button>
+                
+                <p className="text-sm text-center text-gray-600">
+                  Already have an account?{" "}
+                  <Link to="/login" className="text-qualifind-orange hover:underline">
+                    Sign in
                   </Link>
                 </p>
-              )}
-            </CardFooter>
-          </form>
+                {!invitationData && (
+                  <p className="text-sm text-center text-gray-500">
+                    <Link to="/invitation" className="hover:underline">
+                      Have an invitation code?
+                    </Link>
+                  </p>
+                )}
+              </CardFooter>
+            </form>
+          </Form>
         </Card>
       </div>
     </div>

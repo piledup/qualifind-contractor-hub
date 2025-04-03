@@ -75,7 +75,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error("Error fetching user profile:", error);
@@ -253,6 +253,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch (inviteProcessError) {
           console.error("Error processing invitation:", inviteProcessError);
         }
+      }
+
+      // Now wait briefly to ensure the trigger has time to create the profile
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Try to fetch the user profile
+      try {
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .maybeSingle();
+        
+        if (profileError) {
+          console.error("Error fetching profile after registration:", profileError);
+        } else if (profileData) {
+          console.log("Successfully fetched profile after registration:", profileData);
+        } else {
+          console.warn("No profile found after registration, might need to create manually");
+          
+          // If no profile exists, try to create one manually
+          const { error: insertError } = await supabase
+            .from('profiles')
+            .insert({
+              id: data.user.id,
+              email: data.user.email || email,
+              name,
+              role,
+              company_name: companyName,
+              email_verified: false
+            });
+          
+          if (insertError) {
+            console.error("Error manually creating profile:", insertError);
+          } else {
+            console.log("Profile created manually after registration");
+          }
+        }
+      } catch (profileFetchError) {
+        console.error("Error in profile fetch/creation process:", profileFetchError);
       }
 
       // Create user object
