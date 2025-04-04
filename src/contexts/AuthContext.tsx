@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { User, UserRole } from "../types";
 import { supabase } from "@/integrations/supabase/client";
@@ -38,15 +39,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Handle auth state changes, including email confirmations
   useEffect(() => {
     console.log("Setting up auth state listener");
+    
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
         console.log("Auth state changed:", event, session?.user?.id);
-        if (session && session.user) {
-          fetchUserProfile(session.user.id);
-        } else {
+        
+        // Handle various auth events
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          if (session && session.user) {
+            await fetchUserProfile(session.user.id);
+          }
+        } else if (event === 'SIGNED_OUT') {
+          setCurrentUser(null);
+        } else if (event === 'USER_UPDATED') {
+          if (session && session.user) {
+            await fetchUserProfile(session.user.id);
+          }
+        }
+        
+        if (!session) {
           setCurrentUser(null);
           setLoading(false);
         }
@@ -54,14 +69,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
 
     // Check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const initAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       console.log("Checking existing session:", session?.user?.id);
+      
       if (session && session.user) {
-        fetchUserProfile(session.user.id);
+        await fetchUserProfile(session.user.id);
       } else {
         setLoading(false);
       }
-    });
+    };
+
+    initAuth();
 
     return () => {
       subscription.unsubscribe();
@@ -97,7 +116,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setCurrentUser(user);
       } else {
         console.warn("No profile found for user:", userId);
-        setCurrentUser(null);
+        
+        // If no profile exists, try to get basic user info and create a profile
+        try {
+          const { data: userData, error: userError } = await supabase.auth.getUser();
+          
+          if (userError) throw userError;
+          
+          if (userData && userData.user) {
+            // Create a minimal user object from auth data
+            const minimalUser: User = {
+              id: userData.user.id,
+              email: userData.user.email || '',
+              name: userData.user.user_metadata?.name || userData.user.email || 'Unknown User',
+              role: (userData.user.user_metadata?.role as UserRole) || 'general-contractor',
+              companyName: userData.user.user_metadata?.company_name || '',
+              createdAt: new Date(),
+              emailVerified: userData.user.email_confirmed_at ? true : false
+            };
+            
+            setCurrentUser(minimalUser);
+            
+            // Try to create profile
+            await supabase.from('profiles').insert({
+              id: userData.user.id,
+              email: userData.user.email || '',
+              name: userData.user.user_metadata?.name || userData.user.email || 'Unknown User',
+              role: userData.user.user_metadata?.role || 'general-contractor',
+              company_name: userData.user.user_metadata?.company_name || '',
+              email_verified: userData.user.email_confirmed_at ? true : false,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            });
+          }
+        } catch (createError) {
+          console.error("Error creating profile from auth data:", createError);
+        }
       }
     } catch (error) {
       console.error("Error fetching user profile:", error);
