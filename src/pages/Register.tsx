@@ -99,91 +99,81 @@ const Register: React.FC = () => {
   }, [isAuthenticated, currentUser, navigate]);
   
   const onSubmit = async (formData: RegisterFormValues) => {
-    setLoading(true);
+    // Clear any previous errors
     setRegisterError(null);
+    setLoading(true);
     
     try {
-      console.log("Submitting registration form:", { 
+      console.log("Starting registration with form data:", { 
         email: formData.email, 
         name: formData.name, 
         companyName: formData.companyName, 
         role: invitationData ? 'subcontractor' as UserRole : formData.role 
       });
       
+      // Show a loading toast
+      toast({
+        title: "Creating account",
+        description: "Setting up your account. This might take a moment...",
+      });
+      
+      let user;
+      
       if (invitationData) {
-        const userData = {
-          email: formData.email,
-          password: formData.password,
-          name: formData.name,
-          companyName: formData.companyName,
-          role: 'subcontractor' as UserRole, // Force role to be subcontractor
-          invitedBy: invitationData.generalContractorId,
-          invitationCode: invitationData.code
-        };
-
-        console.log("Registering with invitation:", userData);
-        const user = await registerUser(
-          userData.email, 
-          userData.password, 
-          userData.name, 
-          userData.companyName, 
-          userData.role,
-          userData.invitedBy,
-          userData.invitationCode
+        console.log("Registering with invitation data:", invitationData);
+        user = await registerUser(
+          formData.email, 
+          formData.password, 
+          formData.name, 
+          formData.companyName, 
+          'subcontractor' as UserRole,
+          invitationData.generalContractorId,
+          invitationData.code
         );
-
-        if (user) {
-          console.log("User registered successfully with invitation:", user);
-          localStorage.removeItem('invitationData'); // Clear invitation data
-          setShowVerificationBanner(true);
-          
-          toast({
-            title: "Registration successful",
-            description: "Your account has been created successfully.",
-          });
-        } else {
-          setRegisterError("Unable to complete registration. Please try again later.");
-          
-          toast({
-            title: "Registration Error",
-            description: "Unable to complete registration. Please try again later.",
-            variant: "destructive"
-          });
-        }
       } else {
-        const user = await registerUser(
+        console.log("Registering without invitation");
+        user = await registerUser(
           formData.email, 
           formData.password, 
           formData.name, 
           formData.companyName, 
           formData.role
         );
+      }
+      
+      console.log("Registration result:", user);
+      
+      if (user) {
+        console.log("User registered successfully:", user);
         
-        if (user) {
-          console.log("User registered successfully:", user);
-          setShowVerificationBanner(true);
-          
-          toast({
-            title: "Registration successful",
-            description: "Your account has been created successfully.",
-          });
-        } else {
-          setRegisterError("Registration failed. Please try again or contact support.");
-          
-          toast({
-            title: "Registration Error",
-            description: "Registration failed. Please try again or contact support.",
-            variant: "destructive"
-          });
+        if (invitationData) {
+          localStorage.removeItem('invitationData');
         }
+        
+        setShowVerificationBanner(true);
+        
+        toast({
+          title: "Registration successful",
+          description: "Your account has been created successfully.",
+        });
+      } else {
+        setRegisterError("Registration failed. Please try a different email address or contact support.");
+        
+        toast({
+          title: "Registration failed",
+          description: "There was a problem creating your account. Please try again with a different email.",
+          variant: "destructive"
+        });
       }
     } catch (err: any) {
-      console.error("Registration submission error:", err);
-      setRegisterError(err.message || "Failed to create account. Please try again.");
+      console.error("Registration error:", err);
+      
+      const errorMessage = err.message || "Failed to create account. Please try again.";
+      setRegisterError(errorMessage);
       
       toast({
         title: "Registration Error",
-        description: err.message || "Failed to create account. Please try again.",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
