@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { User, UserRole } from "../types";
 import { supabase } from "@/integrations/supabase/client";
@@ -227,6 +226,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       console.log("Auth signup successful, user created:", data.user.id);
 
+      // Wait for the database trigger to create the profile
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
       // Process invitation if it exists
       if (invitationCode && role === 'subcontractor') {
         console.log("Processing invitation code:", invitationCode);
@@ -253,52 +255,104 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      // Now create the profile manually rather than relying on the trigger
-      const profileData = await createUserProfile(data.user.id, email, name, role, companyName);
-      
+      // Check if the profile was created by the trigger
+      const { data: profileData, error: profileFetchError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', data.user.id)
+        .maybeSingle();
+
+      if (profileFetchError) {
+        console.error("Error fetching profile after registration:", profileFetchError);
+      }
+
+      // If profile doesn't exist, create it manually
       if (!profileData) {
-        console.error("Failed to create user profile after multiple attempts");
+        console.log("Profile not found, creating manually");
+        const { data: manualProfile, error: profileError } = await supabase
+          .from('profiles')
+          .insert({
+            id: data.user.id,
+            email: email,
+            name: name,
+            role: role,
+            company_name: companyName,
+            email_verified: false,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (profileError) {
+          console.error("Error creating profile manually:", profileError);
+          
+          // Even if profile creation fails, create a minimal user object
+          const fallbackUser: User = {
+            id: data.user.id,
+            email: email,
+            name: name,
+            role: role,
+            companyName: companyName,
+            createdAt: new Date(),
+            emailVerified: false
+          };
+          
+          setCurrentUser(fallbackUser);
+          
+          toast({
+            title: "Registration complete",
+            description: "Your account was created, but there was an issue with profile creation. Some features may be limited.",
+            variant: "default"
+          });
+          
+          return fallbackUser;
+        }
         
-        // Create a minimal user object so the frontend can proceed
+        if (manualProfile) {
+          const user: User = {
+            id: manualProfile.id,
+            email: manualProfile.email,
+            name: manualProfile.name,
+            role: manualProfile.role as UserRole,
+            companyName: manualProfile.company_name || '',
+            createdAt: new Date(manualProfile.created_at),
+            emailVerified: manualProfile.email_verified || false,
+            lastSignIn: manualProfile.last_sign_in ? new Date(manualProfile.last_sign_in) : undefined
+          };
+          
+          setCurrentUser(user);
+          
+          toast({
+            title: "Registration successful",
+            description: "Your account has been created successfully."
+          });
+          
+          return user;
+        }
+      } else {
+        // Profile was created by the trigger
+        console.log("Profile created by trigger:", profileData);
         const user: User = {
-          id: data.user.id,
-          email: email,
-          name: name,
-          role: role,
-          companyName: companyName,
-          createdAt: new Date(),
-          emailVerified: false
+          id: profileData.id,
+          email: profileData.email,
+          name: profileData.name,
+          role: profileData.role as UserRole,
+          companyName: profileData.company_name || '',
+          createdAt: new Date(profileData.created_at),
+          emailVerified: profileData.email_verified || false,
+          lastSignIn: profileData.last_sign_in ? new Date(profileData.last_sign_in) : undefined
         };
         
         setCurrentUser(user);
         
         toast({
-          title: "Registration partially successful",
-          description: "Your account was created but some profile data may be incomplete. You can continue to use the app.",
-          variant: "default"
+          title: "Registration successful",
+          description: "Your account has been created successfully."
         });
         
         return user;
       }
-      
-      // Create user object from profile data
-      const user: User = {
-        id: profileData.id,
-        email: profileData.email,
-        name: profileData.name,
-        role: profileData.role as UserRole,
-        companyName: profileData.company_name || '',
-        createdAt: new Date(profileData.created_at),
-        emailVerified: profileData.email_verified || false,
-        lastSignIn: profileData.last_sign_in ? new Date(profileData.last_sign_in) : undefined
-      };
-      
-      setCurrentUser(user);
-      
-      toast({
-        title: "Registration successful",
-        description: "Your account has been created successfully."
-      });
       
       // Send verification email
       if (data.user.email) {
@@ -311,7 +365,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
       
-      return user;
+      return null;
     } catch (error: any) {
       console.error("Registration error:", error);
       toast({
@@ -323,69 +377,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setLoading(false);
     }
-  };
-
-  // Helper function to create user profile with retries
-  const createUserProfile = async (
-    userId: string,
-    email: string,
-    name: string,
-    role: UserRole,
-    companyName: string,
-    retryCount = 3
-  ) => {
-    for (let attempt = 1; attempt <= retryCount; attempt++) {
-      try {
-        console.log(`Attempt ${attempt} to create profile for user: ${userId}`);
-        
-        // First check if profile already exists (the trigger might have worked)
-        const { data: existingProfile, error: checkError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .maybeSingle();
-          
-        if (checkError) {
-          console.error("Error checking for existing profile:", checkError);
-        } else if (existingProfile) {
-          console.log("Profile already exists:", existingProfile);
-          return existingProfile;
-        }
-        
-        // If no profile exists, create one manually
-        const { data: profile, error } = await supabase
-          .from('profiles')
-          .insert({
-            id: userId,
-            email: email,
-            name: name,
-            role: role,
-            company_name: companyName,
-            email_verified: false
-          })
-          .select()
-          .single();
-
-        if (error) {
-          console.error(`Error creating profile (attempt ${attempt}):`, error);
-          if (attempt === retryCount) throw error;
-          // Wait before retrying
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        } else {
-          console.log("Profile created successfully:", profile);
-          return profile;
-        }
-      } catch (error) {
-        console.error(`Profile creation attempt ${attempt} failed:`, error);
-        if (attempt === retryCount) {
-          console.error("All profile creation attempts failed");
-          return null;
-        }
-        // Wait before retrying
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-    }
-    return null;
   };
 
   const resetPassword = async (email: string): Promise<boolean> => {
