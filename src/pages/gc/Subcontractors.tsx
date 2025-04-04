@@ -21,10 +21,62 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue 
 } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, handleSupabaseError } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/ui/use-toast";
 import { SubmissionStatus, QualificationStatus } from "@/types";
+
+// Custom hook for fetching subcontractors
+const useSubcontractors = (currentUserId?: string) => {
+  return useQuery({
+    queryKey: ['subcontractors', currentUserId],
+    queryFn: async () => {
+      if (!currentUserId) return [];
+      
+      const { data, error } = await supabase
+        .from('subcontractors')
+        .select('*')
+        .eq('invited_by', currentUserId);
+        
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentUserId
+  });
+};
+
+// Custom hook for fetching unique trades
+const useTrades = (subcontractors: any[]) => {
+  return useQuery({
+    queryKey: ['trades', subcontractors?.length],
+    queryFn: async () => {
+      if (!subcontractors || subcontractors.length === 0) return [];
+      
+      const uniqueTrades = [...new Set(subcontractors.map(sub => sub.trade))];
+      return uniqueTrades.filter(Boolean);
+    },
+    enabled: !!subcontractors && subcontractors.length > 0
+  });
+};
+
+// Custom hook for fetching projects
+const useProjects = (currentUserId?: string) => {
+  return useQuery({
+    queryKey: ['projects', currentUserId],
+    queryFn: async () => {
+      if (!currentUserId) return [];
+      
+      const { data, error } = await supabase
+        .from('projects')
+        .select('id, name')
+        .eq('created_by', currentUserId);
+        
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentUserId
+  });
+};
 
 const Subcontractors: React.FC = () => {
   const { currentUser } = useAuth();
@@ -37,51 +89,29 @@ const Subcontractors: React.FC = () => {
   
   const queryClient = useQueryClient();
   
-  // Fetch subcontractors
-  const { data: subcontractors = [], isLoading: loadingSubcontractors } = useQuery({
-    queryKey: ['subcontractors', currentUser?.id],
-    queryFn: async () => {
-      if (!currentUser?.id) return [];
-      
-      const { data, error } = await supabase
-        .from('subcontractors')
-        .select('*')
-        .eq('invited_by', currentUser.id);
-        
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!currentUser?.id
-  });
+  // Fetch subcontractors using the custom hook
+  const { 
+    data: subcontractors = [], 
+    isLoading: loadingSubcontractors,
+    error: subcontractorsError
+  } = useSubcontractors(currentUser?.id);
   
-  // Fetch unique trades for filter
-  const { data: trades = [] } = useQuery({
-    queryKey: ['trades', currentUser?.id],
-    queryFn: async () => {
-      if (!subcontractors || subcontractors.length === 0) return [];
-      
-      const uniqueTrades = [...new Set(subcontractors.map(sub => sub.trade))];
-      return uniqueTrades.filter(Boolean);
-    },
-    enabled: !!subcontractors && subcontractors.length > 0
-  });
+  // Fetch unique trades for filter using the custom hook
+  const { data: trades = [] } = useTrades(subcontractors);
   
-  // Fetch projects for filter
-  const { data: projects = [] } = useQuery({
-    queryKey: ['projects', currentUser?.id],
-    queryFn: async () => {
-      if (!currentUser?.id) return [];
-      
-      const { data, error } = await supabase
-        .from('projects')
-        .select('id, name')
-        .eq('created_by', currentUser.id);
-        
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!currentUser?.id
-  });
+  // Fetch projects for filter using the custom hook
+  const { data: projects = [] } = useProjects(currentUser?.id);
+  
+  // Show error toast if there's an issue fetching subcontractors
+  React.useEffect(() => {
+    if (subcontractorsError) {
+      toast({
+        title: "Error loading subcontractors",
+        description: handleSupabaseError(subcontractorsError),
+        variant: "destructive"
+      });
+    }
+  }, [subcontractorsError]);
   
   // Filter subcontractors
   const filteredSubcontractors = subcontractors
@@ -335,7 +365,6 @@ const InviteSubcontractorDialog = ({ queryClient }: { queryClient: any }) => {
   const [email, setEmail] = useState("");
   const [trade, setTrade] = useState("");
   const [open, setOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
 
   // Create invitation mutation
   const createInvitationMutation = useMutation({
@@ -394,7 +423,7 @@ const InviteSubcontractorDialog = ({ queryClient }: { queryClient: any }) => {
       console.error("Error inviting subcontractor:", error);
       toast({
         title: "Failed to send invitation",
-        description: error.message || "There was an error sending the invitation. Please try again.",
+        description: handleSupabaseError(error),
         variant: "destructive"
       });
     }
@@ -410,7 +439,6 @@ const InviteSubcontractorDialog = ({ queryClient }: { queryClient: any }) => {
       return;
     }
     
-    setSubmitting(true);
     createInvitationMutation.mutate({ email, trade });
   };
 
@@ -459,9 +487,9 @@ const InviteSubcontractorDialog = ({ queryClient }: { queryClient: any }) => {
           <Button 
             type="submit" 
             onClick={handleInvite}
-            disabled={submitting || !email}
+            disabled={createInvitationMutation.isPending || !email}
           >
-            {submitting ? "Sending..." : "Send Invitation"}
+            {createInvitationMutation.isPending ? "Sending..." : "Send Invitation"}
           </Button>
         </DialogFooter>
       </DialogContent>

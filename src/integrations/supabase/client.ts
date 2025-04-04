@@ -21,3 +21,10 @@ export const supabase = createClient<Database>(
     }
   }
 );
+
+// Helper function to handle common Supabase errors
+export const handleSupabaseError = (error: any) => {
+  console.error("Supabase error:", error);
+  const errorMessage = error.message || "An unexpected error occurred";
+  return errorMessage;
+};

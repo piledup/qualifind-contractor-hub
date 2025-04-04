@@ -10,16 +10,75 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Building, Plus, Calendar, Users, MoreHorizontal, Briefcase } from "lucide-react";
-import { getCurrentUser, mockProjects, mockProjectSubcontractors, mockSubcontractors } from "@/data/mockData";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase, handleSupabaseError } from "@/integrations/supabase/client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "@/components/ui/use-toast";
 import { Project } from "@/types";
 import { format } from "date-fns";
 
+// Custom hook for fetching projects
+const useProjects = (userId?: string) => {
+  return useQuery({
+    queryKey: ['projects', userId],
+    queryFn: async () => {
+      if (!userId) return [];
+      
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('created_by', userId);
+        
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!userId
+  });
+};
+
+// Custom hook for fetching project subcontractors
+const useProjectSubcontractors = (projectId?: string) => {
+  return useQuery({
+    queryKey: ['project-subcontractors', projectId],
+    queryFn: async () => {
+      if (!projectId) return [];
+      
+      const { data, error } = await supabase
+        .from('project_subcontractors')
+        .select(`
+          *,
+          subcontractors:subcontractor_id(id, name, company_name, trade)
+        `)
+        .eq('project_id', projectId);
+        
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!projectId
+  });
+};
+
 const Projects: React.FC = () => {
-  const gcUser = getCurrentUser("general-contractor");
+  const { currentUser } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   
-  // Get projects for this GC
-  const projects = mockProjects.filter(project => project.createdBy === gcUser.id);
+  // Fetch projects for this GC
+  const { 
+    data: projects = [], 
+    isLoading: loadingProjects,
+    error: projectsError
+  } = useProjects(currentUser?.id);
+  
+  // Show error toast if there's an issue fetching projects
+  React.useEffect(() => {
+    if (projectsError) {
+      toast({
+        title: "Error loading projects",
+        description: handleSupabaseError(projectsError),
+        variant: "destructive"
+      });
+    }
+  }, [projectsError]);
   
   // Filter projects by search query
   const filteredProjects = projects.filter(project => {
@@ -27,8 +86,8 @@ const Projects: React.FC = () => {
     const query = searchQuery.toLowerCase();
     return (
       project.name.toLowerCase().includes(query) ||
-      project.description.toLowerCase().includes(query) ||
-      project.location.toLowerCase().includes(query)
+      (project.description || '').toLowerCase().includes(query) ||
+      (project.location || '').toLowerCase().includes(query)
     );
   });
   
@@ -48,7 +107,11 @@ const Projects: React.FC = () => {
           </div>
         </div>
         
-        {filteredProjects.length === 0 ? (
+        {loadingProjects ? (
+          <div className="flex justify-center p-12">
+            <p>Loading projects...</p>
+          </div>
+        ) : filteredProjects.length === 0 ? (
           <Card className="flex flex-col items-center justify-center p-12">
             <Building size={48} className="text-muted-foreground mb-4" />
             <h2 className="text-xl font-semibold mb-2">No projects found</h2>
@@ -70,14 +133,12 @@ const Projects: React.FC = () => {
 };
 
 const ProjectCard: React.FC<{ project: Project }> = ({ project }) => {
-  // Get subcontractors for this project
-  const projectSubs = mockProjectSubcontractors.filter(
-    ps => ps.projectId === project.id
-  );
+  // Fetch subcontractors for this project
+  const { data: projectSubs = [] } = useProjectSubcontractors(project.id);
   
   // Calculate total contract value
   const totalContractValue = projectSubs.reduce(
-    (sum, ps) => sum + (ps.contractAmount || 0), 
+    (sum, ps) => sum + (ps.contract_amount || 0), 
     0
   );
   
@@ -114,7 +175,7 @@ const ProjectCard: React.FC<{ project: Project }> = ({ project }) => {
           <div className="flex items-center text-sm text-muted-foreground">
             <Calendar size={14} className="mr-2" />
             <span>
-              Start: {format(new Date(project.startDate), "MMM d, yyyy")}
+              Start: {project.start_date ? format(new Date(project.start_date), "MMM d, yyyy") : 'Not set'}
             </span>
           </div>
           
@@ -145,20 +206,17 @@ const ProjectCard: React.FC<{ project: Project }> = ({ project }) => {
               <div className="max-h-40 overflow-y-auto">
                 <Table>
                   <TableBody>
-                    {projectSubs.map(ps => {
-                      const subcontractor = mockSubcontractors.find(s => s.id === ps.subcontractorId);
-                      return (
-                        <TableRow key={ps.subcontractorId}>
-                          <TableCell className="py-2">
-                            <div className="font-medium">{subcontractor?.companyName}</div>
-                            <div className="text-xs text-muted-foreground">{subcontractor?.trade}</div>
-                          </TableCell>
-                          <TableCell className="text-right py-2">
-                            ${ps.contractAmount?.toLocaleString()}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
+                    {projectSubs.map(ps => (
+                      <TableRow key={ps.subcontractor_id}>
+                        <TableCell className="py-2">
+                          <div className="font-medium">{ps.subcontractors?.company_name}</div>
+                          <div className="text-xs text-muted-foreground">{ps.subcontractors?.trade}</div>
+                        </TableCell>
+                        <TableCell className="text-right py-2">
+                          ${ps.contract_amount?.toLocaleString() || '0'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               </div>
@@ -182,19 +240,19 @@ const ProjectCard: React.FC<{ project: Project }> = ({ project }) => {
               <div className="grid grid-cols-2">
                 <span className="text-muted-foreground">Start Date:</span>
                 <span className="text-right">
-                  {format(new Date(project.startDate), "MMM d, yyyy")}
+                  {project.start_date ? format(new Date(project.start_date), "MMM d, yyyy") : 'Not set'}
                 </span>
               </div>
               <div className="grid grid-cols-2">
                 <span className="text-muted-foreground">End Date:</span>
                 <span className="text-right">
-                  {project.endDate ? format(new Date(project.endDate), "MMM d, yyyy") : "TBD"}
+                  {project.end_date ? format(new Date(project.end_date), "MMM d, yyyy") : "TBD"}
                 </span>
               </div>
               <div className="grid grid-cols-2">
                 <span className="text-muted-foreground">Created:</span>
                 <span className="text-right">
-                  {format(new Date(project.createdAt), "MMM d, yyyy")}
+                  {format(new Date(project.created_at), "MMM d, yyyy")}
                 </span>
               </div>
             </div>
@@ -209,22 +267,87 @@ const ProjectCard: React.FC<{ project: Project }> = ({ project }) => {
 };
 
 const CreateProjectDialog: React.FC = () => {
+  const { currentUser } = useAuth();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
   const [startDate, setStartDate] = useState("");
   const [budget, setBudget] = useState("");
   const [open, setOpen] = useState(false);
+  
+  const queryClient = useQueryClient();
+
+  // Create project mutation
+  const createProjectMutation = useMutation({
+    mutationFn: async (projectData: {
+      name: string;
+      description: string;
+      location: string;
+      start_date: string;
+      budget: string;
+    }) => {
+      if (!currentUser?.id) throw new Error("You must be logged in to create projects");
+      
+      const { data, error } = await supabase
+        .from('projects')
+        .insert({
+          name: projectData.name,
+          description: projectData.description,
+          location: projectData.location,
+          start_date: projectData.start_date,
+          budget: projectData.budget ? parseFloat(projectData.budget) : null,
+          created_by: currentUser.id,
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Project created",
+        description: "Your new project has been created successfully.",
+      });
+      
+      // Reset form
+      setName("");
+      setDescription("");
+      setLocation("");
+      setStartDate("");
+      setBudget("");
+      setOpen(false);
+      
+      // Refetch projects
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+    },
+    onError: (error: any) => {
+      console.error("Error creating project:", error);
+      toast({
+        title: "Failed to create project",
+        description: handleSupabaseError(error),
+        variant: "destructive"
+      });
+    }
+  });
 
   const handleCreate = () => {
-    // Logic to create project would go here
-    console.log("Creating project:", { name, description, location, startDate, budget });
-    setName("");
-    setDescription("");
-    setLocation("");
-    setStartDate("");
-    setBudget("");
-    setOpen(false);
+    if (!name) {
+      toast({
+        title: "Project name required",
+        description: "Please enter a name for your project.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    createProjectMutation.mutate({
+      name,
+      description,
+      location,
+      start_date: startDate,
+      budget,
+    });
   };
 
   return (
@@ -301,7 +424,13 @@ const CreateProjectDialog: React.FC = () => {
           </div>
         </div>
         <DialogFooter>
-          <Button type="submit" onClick={handleCreate}>Create Project</Button>
+          <Button 
+            type="submit" 
+            onClick={handleCreate}
+            disabled={createProjectMutation.isPending || !name}
+          >
+            {createProjectMutation.isPending ? "Creating..." : "Create Project"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
