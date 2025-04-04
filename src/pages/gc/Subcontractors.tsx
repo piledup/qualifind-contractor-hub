@@ -20,13 +20,14 @@ import { Filter, Plus, MoreHorizontal, CheckCircle, XCircle } from "lucide-react
 import { 
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue 
 } from "@/components/ui/select";
-import { 
-  mockSubcontractors, mockProjects, getCurrentUser 
-} from "@/data/mockData";
-import { Subcontractor, SubmissionStatus, QualificationStatus } from "@/types";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "@/components/ui/use-toast";
+import { SubmissionStatus, QualificationStatus } from "@/types";
 
 const Subcontractors: React.FC = () => {
-  const gcUser = getCurrentUser("general-contractor");
+  const { currentUser } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [tradeFilter, setTradeFilter] = useState<string | null>(null);
   const [submissionFilter, setSubmissionFilter] = useState<SubmissionStatus | null>(null);
@@ -34,25 +35,69 @@ const Subcontractors: React.FC = () => {
   const [projectFilter, setProjectFilter] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   
-  // Get unique trades for filter
-  const trades = [...new Set(mockSubcontractors.map(sub => sub.trade))];
-
+  const queryClient = useQueryClient();
+  
+  // Fetch subcontractors
+  const { data: subcontractors = [], isLoading: loadingSubcontractors } = useQuery({
+    queryKey: ['subcontractors', currentUser?.id],
+    queryFn: async () => {
+      if (!currentUser?.id) return [];
+      
+      const { data, error } = await supabase
+        .from('subcontractors')
+        .select('*')
+        .eq('invited_by', currentUser.id);
+        
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!currentUser?.id
+  });
+  
+  // Fetch unique trades for filter
+  const { data: trades = [] } = useQuery({
+    queryKey: ['trades', currentUser?.id],
+    queryFn: async () => {
+      if (!subcontractors || subcontractors.length === 0) return [];
+      
+      const uniqueTrades = [...new Set(subcontractors.map(sub => sub.trade))];
+      return uniqueTrades.filter(Boolean);
+    },
+    enabled: !!subcontractors && subcontractors.length > 0
+  });
+  
+  // Fetch projects for filter
+  const { data: projects = [] } = useQuery({
+    queryKey: ['projects', currentUser?.id],
+    queryFn: async () => {
+      if (!currentUser?.id) return [];
+      
+      const { data, error } = await supabase
+        .from('projects')
+        .select('id, name')
+        .eq('created_by', currentUser.id);
+        
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!currentUser?.id
+  });
+  
   // Filter subcontractors
-  const filteredSubcontractors = mockSubcontractors
-    .filter(sub => sub.invitedBy === gcUser.id)
+  const filteredSubcontractors = subcontractors
     .filter(sub => {
       if (!searchQuery) return true;
       const query = searchQuery.toLowerCase();
       return (
-        sub.name.toLowerCase().includes(query) ||
-        sub.companyName.toLowerCase().includes(query) ||
+        (sub.name || '').toLowerCase().includes(query) ||
+        (sub.company_name || '').toLowerCase().includes(query) ||
         sub.email.toLowerCase().includes(query) ||
-        sub.trade.toLowerCase().includes(query)
+        (sub.trade || '').toLowerCase().includes(query)
       );
     })
     .filter(sub => !tradeFilter || sub.trade === tradeFilter)
-    .filter(sub => !submissionFilter || sub.submissionStatus === submissionFilter)
-    .filter(sub => !qualificationFilter || sub.qualificationStatus === qualificationFilter);
+    .filter(sub => !submissionFilter || sub.submission_status === submissionFilter)
+    .filter(sub => !qualificationFilter || sub.qualification_status === qualificationFilter);
   
   const getStatusBadgeClass = (status: SubmissionStatus) => {
     switch (status) {
@@ -102,7 +147,7 @@ const Subcontractors: React.FC = () => {
             >
               <Filter size={18} />
             </Button>
-            <InviteSubcontractorDialog />
+            <InviteSubcontractorDialog queryClient={queryClient} />
           </div>
         </div>
         
@@ -175,7 +220,7 @@ const Subcontractors: React.FC = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">All Projects</SelectItem>
-                    {mockProjects.filter(p => p.createdBy === gcUser.id).map(project => (
+                    {projects.map(project => (
                       <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -214,7 +259,13 @@ const Subcontractors: React.FC = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredSubcontractors.length === 0 ? (
+                {loadingSubcontractors ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      Loading subcontractors...
+                    </TableCell>
+                  </TableRow>
+                ) : filteredSubcontractors.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                       No subcontractors found
@@ -225,22 +276,22 @@ const Subcontractors: React.FC = () => {
                     <TableRow key={sub.id}>
                       <TableCell className="font-medium">
                         <div className="space-y-1">
-                          <div>{sub.companyName || sub.email}</div>
+                          <div>{sub.company_name || sub.email}</div>
                           <div className="text-xs text-muted-foreground">{sub.name}</div>
                         </div>
                       </TableCell>
                       <TableCell>{sub.trade}</TableCell>
                       <TableCell>
-                        <span className={getStatusBadgeClass(sub.submissionStatus)}>
-                          {sub.submissionStatus.charAt(0).toUpperCase() + sub.submissionStatus.slice(1)}
+                        <span className={getStatusBadgeClass(sub.submission_status as SubmissionStatus)}>
+                          {sub.submission_status?.charAt(0).toUpperCase() + sub.submission_status?.slice(1)}
                         </span>
                       </TableCell>
-                      <TableCell>{getQualificationBadge(sub.qualificationStatus)}</TableCell>
+                      <TableCell>{getQualificationBadge(sub.qualification_status as QualificationStatus)}</TableCell>
                       <TableCell>
-                        {sub.qualificationStatus === "qualified" ? (
+                        {sub.qualification_status === "qualified" ? (
                           <div className="text-sm">
-                            <div>Single: ${sub.singleProjectLimit?.toLocaleString()}</div>
-                            <div>Aggregate: ${sub.aggregateLimit?.toLocaleString()}</div>
+                            <div>Single: ${sub.single_project_limit?.toLocaleString()}</div>
+                            <div>Aggregate: ${sub.aggregate_limit?.toLocaleString()}</div>
                           </div>
                         ) : (
                           <span className="text-sm text-muted-foreground">N/A</span>
@@ -261,7 +312,7 @@ const Subcontractors: React.FC = () => {
   );
 };
 
-const SubcontractorActions: React.FC<{ subcontractor: Subcontractor }> = ({ subcontractor }) => {
+const SubcontractorActions = ({ subcontractor }: { subcontractor: any }) => {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -279,17 +330,88 @@ const SubcontractorActions: React.FC<{ subcontractor: Subcontractor }> = ({ subc
   );
 };
 
-const InviteSubcontractorDialog: React.FC = () => {
+const InviteSubcontractorDialog = ({ queryClient }: { queryClient: any }) => {
+  const { currentUser } = useAuth();
   const [email, setEmail] = useState("");
   const [trade, setTrade] = useState("");
   const [open, setOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Create invitation mutation
+  const createInvitationMutation = useMutation({
+    mutationFn: async ({ email, trade }: { email: string; trade: string }) => {
+      if (!currentUser?.id) throw new Error("You must be logged in to invite subcontractors");
+      
+      // Generate a random code
+      const code = Math.random().toString(36).substring(2, 10).toUpperCase();
+      
+      // First create the invitation
+      const { data: invitation, error: invitationError } = await supabase
+        .from('invitations')
+        .insert({
+          email,
+          code,
+          general_contractor_id: currentUser.id,
+          status: 'pending',
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
+        })
+        .select()
+        .single();
+      
+      if (invitationError) throw invitationError;
+      
+      // Then create an empty subcontractor record
+      const { data: subcontractor, error: subError } = await supabase
+        .from('subcontractors')
+        .insert({
+          email,
+          trade,
+          invited_by: currentUser.id,
+          qualification_status: 'pending',
+          submission_status: 'unsubmitted',
+        })
+        .select()
+        .single();
+      
+      if (subError) throw subError;
+      
+      return { invitation, subcontractor };
+    },
+    onSuccess: () => {
+      toast({
+        title: "Invitation sent",
+        description: `Invitation email sent to ${email} successfully.`,
+      });
+      setEmail("");
+      setTrade("");
+      setOpen(false);
+      
+      // Refetch data
+      queryClient.invalidateQueries({ queryKey: ['subcontractors'] });
+      queryClient.invalidateQueries({ queryKey: ['invitations'] });
+    },
+    onError: (error: any) => {
+      console.error("Error inviting subcontractor:", error);
+      toast({
+        title: "Failed to send invitation",
+        description: error.message || "There was an error sending the invitation. Please try again.",
+        variant: "destructive"
+      });
+    }
+  });
 
   const handleInvite = () => {
-    // Logic to invite subcontractor would go here
-    console.log("Inviting:", { email, trade });
-    setEmail("");
-    setTrade("");
-    setOpen(false);
+    if (!email) {
+      toast({
+        title: "Email required",
+        description: "Please enter an email address for the subcontractor.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setSubmitting(true);
+    createInvitationMutation.mutate({ email, trade });
   };
 
   return (
@@ -334,7 +456,13 @@ const InviteSubcontractorDialog: React.FC = () => {
           </div>
         </div>
         <DialogFooter>
-          <Button type="submit" onClick={handleInvite}>Send Invitation</Button>
+          <Button 
+            type="submit" 
+            onClick={handleInvite}
+            disabled={submitting || !email}
+          >
+            {submitting ? "Sending..." : "Send Invitation"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

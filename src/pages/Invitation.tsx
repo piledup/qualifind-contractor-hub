@@ -48,7 +48,7 @@ const Invitation = () => {
         throw error;
       }
 
-      // Check if data exists and is an array with at least one valid entry
+      // Check if data exists and is valid
       if (data && Array.isArray(data) && data.length > 0 && data[0].valid) {
         const invitationData = data[0] as InvitationData;
         
@@ -74,11 +74,11 @@ const Invitation = () => {
           variant: "destructive"
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error verifying invitation code:", error);
       toast({
         title: "Verification failed",
-        description: "Unable to verify the invitation code. Please try again.",
+        description: error.message || "Unable to verify the invitation code. Please try again.",
         variant: "destructive"
       });
     } finally {

@@ -6,41 +6,96 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Clock, ArrowRight, Building, Briefcase, FileText, CheckCircle, AlertCircle } from "lucide-react";
 import { Link } from "react-router-dom";
-import { 
-  getCurrentUser, 
-  mockSubcontractors, 
-  mockProjects, 
-  mockProjectSubcontractors,
-  mockQualificationDocuments,
-  getProjectsForSubcontractor
-} from "@/data/mockData";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 
 const SubDashboard: React.FC = () => {
-  const subUser = getCurrentUser("subcontractor");
+  const { currentUser } = useAuth();
   
-  // Get subcontractor data for this user
-  const subcontractor = mockSubcontractors.find(sub => sub.userId === subUser.id);
+  // Fetch subcontractor data for this user
+  const { data: subcontractor, isLoading: loadingSubcontractor } = useQuery({
+    queryKey: ['subcontractor', currentUser?.id],
+    queryFn: async () => {
+      if (!currentUser?.id) return null;
+      
+      const { data, error } = await supabase
+        .from('subcontractors')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .maybeSingle();
+        
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!currentUser?.id
+  });
   
   // If no subcontractor record yet, show payment required screen
-  if (!subcontractor || !subcontractor.hasPaid) {
+  if (loadingSubcontractor) {
+    return (
+      <MainLayout roles={["subcontractor"]}>
+        <div className="flex items-center justify-center h-[80vh]">
+          <div className="text-center">
+            <div className="text-lg mb-2">Loading your dashboard...</div>
+            <div className="text-sm text-muted-foreground">Please wait while we fetch your information</div>
+          </div>
+        </div>
+      </MainLayout>
+    );
+  }
+  
+  if (!subcontractor || !subcontractor.has_paid) {
     return <PaymentRequired />;
   }
   
   // Get projects this subcontractor is assigned to
-  const subProjects = getProjectsForSubcontractor(subcontractor.id);
+  const { data: subProjects = [], isLoading: loadingProjects } = useQuery({
+    queryKey: ['subProjects', subcontractor.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('project_subcontractors')
+        .select(`
+          project_id,
+          contract_amount,
+          projects(id, name, description)
+        `)
+        .eq('subcontractor_id', subcontractor.id);
+        
+      if (error) throw error;
+      
+      return data.map(item => ({
+        id: item.project_id,
+        name: item.projects?.name,
+        contractAmount: item.contract_amount
+      }));
+    },
+    enabled: !!subcontractor?.id
+  });
   
   // Get documents uploaded by this subcontractor
-  const documents = mockQualificationDocuments.filter(doc => doc.subcontractorId === subcontractor.id);
+  const { data: documents = [], isLoading: loadingDocuments } = useQuery({
+    queryKey: ['documents', subcontractor.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('qualification_documents')
+        .select('*')
+        .eq('subcontractor_id', subcontractor.id)
+        .order('uploaded_at', { ascending: false });
+        
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!subcontractor?.id
+  });
   
   // Calculate total contract value
-  const totalContractValue = mockProjectSubcontractors
-    .filter(ps => ps.subcontractorId === subcontractor.id)
-    .reduce((sum, ps) => sum + (ps.contractAmount || 0), 0);
+  const totalContractValue = subProjects.reduce((sum, p) => sum + (p.contractAmount || 0), 0);
   
   // Is qualification status valid
-  const isQualified = subcontractor.qualificationStatus === "qualified";
-  const isExpiring = subcontractor.submissionStatus === "expiring";
-  const isExpired = subcontractor.submissionStatus === "expired";
+  const isQualified = subcontractor.qualification_status === "qualified";
+  const isExpiring = subcontractor.submission_status === "expiring";
+  const isExpired = subcontractor.submission_status === "expired";
   
   return (
     <MainLayout roles={["subcontractor"]}>
@@ -48,7 +103,7 @@ const SubDashboard: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold">Dashboard</h1>
           <p className="text-muted-foreground">
-            Welcome back, {subUser.name}
+            Welcome back, {currentUser?.name}
           </p>
         </div>
         
@@ -122,13 +177,13 @@ const SubDashboard: React.FC = () => {
                     <div className="flex justify-between text-sm border-t pt-2">
                       <span className="text-muted-foreground">Single Project Limit</span>
                       <span className="font-medium">
-                        ${subcontractor.singleProjectLimit?.toLocaleString() || "N/A"}
+                        ${subcontractor.single_project_limit?.toLocaleString() || "N/A"}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Aggregate Limit</span>
                       <span className="font-medium">
-                        ${subcontractor.aggregateLimit?.toLocaleString() || "N/A"}
+                        ${subcontractor.aggregate_limit?.toLocaleString() || "N/A"}
                       </span>
                     </div>
                   </div>
@@ -178,16 +233,20 @@ const SubDashboard: React.FC = () => {
                 </div>
                 
                 <div className="space-y-2">
-                  {subProjects.slice(0, 2).map(project => (
-                    <div key={project.id} className="flex items-center justify-between text-sm border-b pb-2">
-                      <div className="font-medium">{project.name}</div>
-                      <div className="text-muted-foreground">
-                        ${mockProjectSubcontractors.find(ps => 
-                          ps.projectId === project.id && ps.subcontractorId === subcontractor.id
-                        )?.contractAmount?.toLocaleString() || "0"}
-                      </div>
+                  {subProjects.length === 0 ? (
+                    <div className="text-sm text-muted-foreground text-center py-2">
+                      No projects assigned yet
                     </div>
-                  ))}
+                  ) : (
+                    subProjects.slice(0, 2).map(project => (
+                      <div key={project.id} className="flex items-center justify-between text-sm border-b pb-2">
+                        <div className="font-medium">{project.name}</div>
+                        <div className="text-muted-foreground">
+                          ${project.contractAmount?.toLocaleString() || "0"}
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
                 
                 <Button asChild variant="outline" size="sm" className="w-full">
@@ -223,10 +282,10 @@ const SubDashboard: React.FC = () => {
                     documents.slice(0, 3).map(doc => (
                       <div key={doc.id} className="flex items-center justify-between text-sm border-b pb-2">
                         <div className="font-medium truncate max-w-[150px]">
-                          {doc.documentType}
+                          {doc.document_type}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {doc.uploadedAt.toLocaleDateString()}
+                          {new Date(doc.uploaded_at).toLocaleDateString()}
                         </div>
                       </div>
                     ))
@@ -279,22 +338,37 @@ const SubDashboard: React.FC = () => {
             </CardHeader>
             <CardContent>
               <ul className="space-y-2 text-sm">
-                <li className="flex justify-between border-b pb-2">
-                  <span className="text-muted-foreground">Added to Downtown Office Tower</span>
-                  <span>1w ago</span>
-                </li>
-                <li className="flex justify-between border-b pb-2">
-                  <span className="text-muted-foreground">Uploaded Insurance Certificate</span>
-                  <span>2w ago</span>
-                </li>
-                <li className="flex justify-between border-b pb-2">
-                  <span className="text-muted-foreground">Qualified by Build Inc.</span>
-                  <span>2w ago</span>
-                </li>
+                {documents.length > 0 && (
+                  <li className="flex justify-between border-b pb-2">
+                    <span className="text-muted-foreground">Uploaded {documents[0].document_type}</span>
+                    <span>{new Date(documents[0].uploaded_at).toLocaleDateString()}</span>
+                  </li>
+                )}
+                
+                {subProjects.length > 0 && (
+                  <li className="flex justify-between border-b pb-2">
+                    <span className="text-muted-foreground">Added to {subProjects[0].name}</span>
+                    <span>Recently</span>
+                  </li>
+                )}
+                
+                {isQualified && (
+                  <li className="flex justify-between border-b pb-2">
+                    <span className="text-muted-foreground">Qualified by {currentUser?.name}</span>
+                    <span>Recently</span>
+                  </li>
+                )}
+                
                 <li className="flex justify-between">
-                  <span className="text-muted-foreground">Completed qualification</span>
-                  <span>2w ago</span>
+                  <span className="text-muted-foreground">{documents.length > 0 ? "Updated" : "Created"} profile</span>
+                  <span>Recently</span>
                 </li>
+                
+                {documents.length === 0 && subProjects.length === 0 && !isQualified && (
+                  <li className="text-center text-muted-foreground">
+                    No recent activity
+                  </li>
+                )}
               </ul>
             </CardContent>
           </Card>

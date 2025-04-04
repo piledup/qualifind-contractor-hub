@@ -18,6 +18,7 @@ import UpdatePassword from "./pages/UpdatePassword";
 import GCDashboard from "./pages/gc/Dashboard";
 import Subcontractors from "./pages/gc/Subcontractors";
 import Projects from "./pages/gc/Projects";
+import Invitations from "./pages/gc/Invitations";
 
 // Subcontractor Pages
 import SubDashboard from "./pages/sub/Dashboard";
@@ -97,6 +98,14 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={['general-contractor']}>
                   <Projects />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/invitations" 
+              element={
+                <ProtectedRoute allowedRoles={['general-contractor']}>
+                  <Invitations />
                 </ProtectedRoute>
               } 
             />

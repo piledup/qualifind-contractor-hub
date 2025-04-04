@@ -2,7 +2,7 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { Building, Clipboard, Users, Home, FileText, LogOut } from "lucide-react";
+import { Building, Clipboard, Users, Home, FileText, LogOut, Mail } from "lucide-react";
 
 export const Sidebar: React.FC = () => {
   const { currentUser, logout } = useAuth();
@@ -14,11 +14,11 @@ export const Sidebar: React.FC = () => {
         { label: "Dashboard", icon: <Home size={20} />, path: "/dashboard" },
         { label: "Subcontractors", icon: <Users size={20} />, path: "/subcontractors" },
         { label: "Projects", icon: <Building size={20} />, path: "/projects" },
-        { label: "Invitations", icon: <FileText size={20} />, path: "/invitations" },
+        { label: "Invitations", icon: <Mail size={20} />, path: "/invitations" },
       ];
     } else {
       return [
-        { label: "Dashboard", icon: <Home size={20} />, path: "/dashboard" },
+        { label: "Dashboard", icon: <Home size={20} />, path: "/sub-dashboard" },
         { label: "General Contractors", icon: <Building size={20} />, path: "/general-contractors" },
         { label: "Projects", icon: <Clipboard size={20} />, path: "/projects" },
         { label: "Qualification", icon: <FileText size={20} />, path: "/qualification" },
@@ -42,12 +42,12 @@ export const Sidebar: React.FC = () => {
           <div className="flex items-center">
             <div className="w-10 h-10 bg-sidebar-accent rounded-full flex items-center justify-center">
               <span className="text-lg font-medium">
-                {currentUser?.name.charAt(0)}
+                {currentUser?.name?.charAt(0) || "U"}
               </span>
             </div>
             <div className="ml-3">
-              <p className="font-medium">{currentUser?.name}</p>
-              <p className="text-sm text-gray-300">{currentUser?.companyName}</p>
+              <p className="font-medium">{currentUser?.name || "User"}</p>
+              <p className="text-sm text-gray-300">{currentUser?.companyName || ""}</p>
             </div>
           </div>
         </div>
