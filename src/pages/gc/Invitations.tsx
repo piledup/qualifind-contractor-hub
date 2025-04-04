@@ -35,18 +35,20 @@ const Invitations: React.FC = () => {
       
       const { data, error } = await supabase
         .from('invitations')
-        .select(`
-          *,
-          profiles:general_contractor_id(name)
-        `)
+        .select('*')
         .eq('general_contractor_id', currentUser.id)
         .order('created_at', { ascending: false });
         
       if (error) throw error;
       
+      // Fetch GC profile info separately to avoid relation issues
+      const gcProfiles = currentUser ? {
+        name: currentUser.name || 'Unknown'
+      } : { name: 'Unknown' };
+      
       return data.map(inv => ({
         ...inv,
-        generalContractorName: inv.profiles?.name || 'Unknown',
+        generalContractorName: gcProfiles.name,
         createdAt: new Date(inv.created_at),
         expiresAt: new Date(inv.expires_at)
       }));
