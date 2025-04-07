@@ -10,6 +10,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { UserRole } from "@/types";
 import { toast } from "@/components/ui/use-toast";
 import { AlertCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { supabase } from "@/integrations/supabase/client";
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -20,6 +22,7 @@ const Login: React.FC = () => {
   const [role, setRole] = useState<UserRole>("general-contractor");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [isResendingEmail, setIsResendingEmail] = useState(false);
   
   // Redirect if already authenticated
   useEffect(() => {
@@ -54,10 +57,54 @@ const Login: React.FC = () => {
         setError("Invalid email or password");
       }
     } catch (err: any) {
-      setError(err.message || "Login failed");
-      console.error(err);
+      console.error("Login error:", err);
+      
+      // Check specifically for email not confirmed error
+      if (err.message?.includes("Email not confirmed") || err.message?.includes("email_not_confirmed")) {
+        setError("Your email has not been confirmed. Please check your inbox or click 'Resend confirmation' below.");
+      } else {
+        setError(err.message || "Login failed");
+      }
     } finally {
       setLoading(false);
+    }
+  };
+  
+  const handleResendConfirmation = async () => {
+    if (!email) {
+      toast({
+        title: "Email required",
+        description: "Please enter your email address first",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setIsResendingEmail(true);
+    
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: email
+      });
+      
+      if (error) {
+        throw error;
+      }
+      
+      toast({
+        title: "Confirmation email sent",
+        description: "Please check your inbox for the confirmation link"
+      });
+    } catch (err: any) {
+      console.error("Error resending confirmation:", err);
+      toast({
+        title: "Failed to resend confirmation",
+        description: err.message || "An error occurred",
+        variant: "destructive"
+      });
+    } finally {
+      setIsResendingEmail(false);
     }
   };
   
@@ -78,10 +125,22 @@ const Login: React.FC = () => {
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
               {error && (
-                <div className="flex items-center gap-2 bg-red-50 text-red-600 p-3 rounded-md text-sm">
-                  <AlertCircle size={16} />
-                  <span>{error}</span>
-                </div>
+                <Alert variant="destructive" className="text-sm">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription className="ml-2">{error}</AlertDescription>
+                  {error.includes("email has not been confirmed") && (
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handleResendConfirmation}
+                      disabled={isResendingEmail}
+                      className="mt-2 w-full"
+                    >
+                      {isResendingEmail ? "Sending..." : "Resend confirmation email"}
+                    </Button>
+                  )}
+                </Alert>
               )}
               
               <div className="space-y-2">
