@@ -30,7 +30,19 @@ const useProjects = (userId?: string) => {
         .eq('created_by', userId);
         
       if (error) throw error;
-      return data || [];
+      
+      // Map from snake_case DB fields to camelCase for our Project type
+      return (data || []).map(project => ({
+        id: project.id,
+        name: project.name,
+        description: project.description || '',
+        location: project.location || '',
+        startDate: project.start_date ? new Date(project.start_date) : new Date(),
+        endDate: project.end_date ? new Date(project.end_date) : undefined,
+        budget: project.budget || undefined,
+        createdBy: project.created_by,
+        createdAt: new Date(project.created_at)
+      })) as Project[];
     },
     enabled: !!userId
   });
@@ -175,7 +187,7 @@ const ProjectCard: React.FC<{ project: Project }> = ({ project }) => {
           <div className="flex items-center text-sm text-muted-foreground">
             <Calendar size={14} className="mr-2" />
             <span>
-              Start: {project.start_date ? format(new Date(project.start_date), "MMM d, yyyy") : 'Not set'}
+              Start: {project.startDate ? format(new Date(project.startDate), "MMM d, yyyy") : 'Not set'}
             </span>
           </div>
           
@@ -240,19 +252,19 @@ const ProjectCard: React.FC<{ project: Project }> = ({ project }) => {
               <div className="grid grid-cols-2">
                 <span className="text-muted-foreground">Start Date:</span>
                 <span className="text-right">
-                  {project.start_date ? format(new Date(project.start_date), "MMM d, yyyy") : 'Not set'}
+                  {project.startDate ? format(new Date(project.startDate), "MMM d, yyyy") : 'Not set'}
                 </span>
               </div>
               <div className="grid grid-cols-2">
                 <span className="text-muted-foreground">End Date:</span>
                 <span className="text-right">
-                  {project.end_date ? format(new Date(project.end_date), "MMM d, yyyy") : "TBD"}
+                  {project.endDate ? format(new Date(project.endDate), "MMM d, yyyy") : "TBD"}
                 </span>
               </div>
               <div className="grid grid-cols-2">
                 <span className="text-muted-foreground">Created:</span>
                 <span className="text-right">
-                  {format(new Date(project.created_at), "MMM d, yyyy")}
+                  {format(new Date(project.createdAt), "MMM d, yyyy")}
                 </span>
               </div>
             </div>
