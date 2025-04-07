@@ -18,7 +18,9 @@ export const supabase = createClient<Database>(
       persistSession: true,
       detectSessionInUrl: true,
       storage: localStorage,
-      flowType: 'pkce'
+      flowType: 'pkce',
+      // Adding redirect options for email confirmations
+      redirectTo: window.location.origin
     }
   }
 );

@@ -9,7 +9,7 @@ port = 54321
 [auth]
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "http://localhost:3000"
+site_url = "https://vioaqyclkyrhoutysjmh.lovable.app"
 # A list of URLs that auth providers are permitted to redirect to post authentication.
 additional_redirect_urls = ["http://localhost:3000", "http://localhost:3000/**", "https://localhost:3000/**", "capacitor://localhost:3000/**", "https://*.lovable.app/**", "https://vioaqyclkyrhoutysjmh.supabase.co/auth/v1/callback"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
