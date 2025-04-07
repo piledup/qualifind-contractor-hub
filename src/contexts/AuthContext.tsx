@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { User, UserRole } from "../types";
 import { 
@@ -47,6 +46,25 @@ export const useAuth = () => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const getUserRole = async (userId: string): Promise<UserRole> => {
+    try {
+      const { data, error } = await safeSingleSelect(
+        supabase.from('profiles').select('role').eq('id', userId).maybeSingle()
+      );
+      
+      if (error || !data) {
+        console.error("Error fetching user role:", error);
+        return 'general-contractor'; // Default role
+      }
+      
+      const role = (data as any).role as UserRole;
+      return role;
+    } catch (error) {
+      console.error("Error in getUserRole:", error);
+      return 'general-contractor'; // Default role if error
+    }
+  };
 
   // Handle auth state changes, including email confirmations
   useEffect(() => {

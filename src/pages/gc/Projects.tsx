@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Building, Plus, Calendar, Users, MoreHorizontal, Briefcase } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase, handleSupabaseError, filterById, typedInsert } from "@/integrations/supabase/client";
+import { supabase, handleSupabaseError, filterById, safeInsert, typedInsert, safeSelect } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/ui/use-toast";
 import { Project } from "@/types";
@@ -29,7 +29,6 @@ const useProjects = (userId?: string) => {
         
       if (error) throw error;
       
-      // Map from snake_case DB fields to camelCase for our Project type
       return (data || []).map(project => ({
         id: project.id,
         name: project.name,

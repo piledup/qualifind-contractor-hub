@@ -71,6 +71,19 @@ export const safeInsert = async <T>(table: string, data: any): Promise<{data: T 
   }
 };
 
+// Adding typedInsert function that was missing
+export const typedInsert = async <T>(table: string, data: any): Promise<{data: T | null, error: any}> => {
+  try {
+    // @ts-ignore - We're intentionally simplifying type checks
+    const { data: result, error } = await supabase.from(table).insert(data).select();
+    if (error) throw error;
+    return { data: result as T, error: null };
+  } catch (err) {
+    console.error(`Error inserting into ${table}:`, err);
+    return { data: null, error: err };
+  }
+};
+
 // Helper for handling typed updates with simpler typing
 export const safeUpdate = async <T>(table: string, data: any, column: string, value: any): Promise<{data: T | null, error: any}> => {
   try {
