@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { User, UserRole } from "../types";
 import { 
@@ -58,7 +59,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return 'general-contractor'; // Default role
       }
       
-      const role = (data as any).role as UserRole;
+      // Fix the type casting by explicitly defining the expected structure
+      const profileData = data as { role: string };
+      const role = profileData.role as UserRole;
       return role;
     } catch (error) {
       console.error("Error in getUserRole:", error);
