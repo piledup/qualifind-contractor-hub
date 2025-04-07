@@ -30,65 +30,58 @@ export const handleSupabaseError = (error: any) => {
   return errorMessage;
 };
 
-// Type-safe query helper for selecting data properly
-export const typedSelect = async <T>(
-  query: Promise<any>
-): Promise<T> => {
-  const { data, error } = await query;
-  
-  if (error) {
-    console.error("Supabase query error:", error);
-    throw error;
+// Type-safe query helper for selecting data
+export const safeSelect = async <T>(query: any): Promise<{data: T | null, error: any}> => {
+  try {
+    const { data, error } = await query;
+    return { data: data as T, error };
+  } catch (err) {
+    console.error("Query error:", err);
+    return { data: null, error: err };
   }
-  
-  if (!data) {
-    throw new Error("No data returned from query");
-  }
-  
-  return data as T;
 };
 
-// Helper for safely getting a single row, with type safety and error handling
-export const typedSelectSingle = async <T>(
-  query: Promise<any>
-): Promise<T> => {
-  const { data, error } = await query;
-  
-  if (error) {
-    console.error("Supabase query error:", error);
-    throw error;
+// Helper for safely getting a single row
+export const safeSingleSelect = async <T>(query: any): Promise<{data: T | null, error: any}> => {
+  try {
+    const { data, error } = await query;
+    if (error) throw error;
+    return { data: data as T, error: null };
+  } catch (err) {
+    console.error("Single select error:", err);
+    return { data: null, error: err };
   }
-  
-  if (!data) {
-    throw new Error("No data returned from query");
-  }
-  
-  return data as T;
 };
 
-// Helper for handling Supabase ID filters with proper typing
+// Helper for handling ID filters safely
 export const filterById = (id: string) => {
-  return id as any; // This cast allows the query to work while maintaining code safety
+  return id;
 };
 
-// Helper for handling typed inserts to database tables
-export const typedInsert = <T extends Record<string, any>>(
-  table: string, 
-  data: T
-) => {
-  // This function allows explicit type casting for insert operations
-  // @ts-ignore - We're intentionally ignoring type checks here to allow the operation
-  return supabase.from(table).insert(data);
+// Helper for handling typed inserts with simpler typing
+export const safeInsert = async <T>(table: string, data: any): Promise<{data: T | null, error: any}> => {
+  try {
+    // @ts-ignore - We're intentionally simplifying type checks
+    const { data: result, error } = await supabase.from(table).insert(data);
+    if (error) throw error;
+    return { data: result as T, error: null };
+  } catch (err) {
+    console.error(`Error inserting into ${table}:`, err);
+    return { data: null, error: err };
+  }
 };
 
-// Helper for handling typed updates to database tables
-export const typedUpdate = <T extends Record<string, any>>(
-  table: string, 
-  data: T
-) => {
-  // This function allows explicit type casting for update operations
-  // @ts-ignore - We're intentionally ignoring type checks here to allow the operation
-  return supabase.from(table).update(data);
+// Helper for handling typed updates with simpler typing
+export const safeUpdate = async <T>(table: string, data: any, column: string, value: any): Promise<{data: T | null, error: any}> => {
+  try {
+    // @ts-ignore - We're intentionally simplifying type checks
+    const { data: result, error } = await supabase.from(table).update(data).eq(column, value);
+    if (error) throw error;
+    return { data: result as T, error: null };
+  } catch (err) {
+    console.error(`Error updating ${table}:`, err);
+    return { data: null, error: err };
+  }
 };
 
 // Helper function to safely cast return values from RPC functions that return booleans
@@ -98,7 +91,7 @@ export const castToBoolean = (value: any): boolean => {
   return Boolean(value);
 };
 
-// Helper for safely handling Supabase database record conversions to their TypeScript types
+// Helper for safely handling Supabase database record conversions to TypeScript types
 export const convertDbProfileToUser = (profileData: any): any => {
   if (!profileData) return null;
   

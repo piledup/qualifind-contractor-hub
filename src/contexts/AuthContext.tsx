@@ -4,8 +4,10 @@ import { User, UserRole } from "../types";
 import { 
   supabase, 
   filterById, 
-  typedInsert, 
-  typedUpdate, 
+  safeInsert, 
+  safeUpdate,
+  safeSelect,
+  safeSingleSelect,
   castToBoolean, 
   convertDbProfileToUser 
 } from "@/integrations/supabase/client";
@@ -97,11 +99,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchUserProfile = async (userId: string) => {
     try {
       console.log("Fetching user profile for:", userId);
-      const { data, error } = await supabase
+      const query = supabase
         .from('profiles')
         .select('*')
         .eq('id', filterById(userId))
         .maybeSingle();
+        
+      const { data, error } = await safeSingleSelect(query);
 
       if (error) {
         console.error("Error fetching user profile:", error);
@@ -137,7 +141,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setCurrentUser(minimalUser);
             
             // Try to create profile
-            await typedInsert('profiles', {
+            const profileData = {
               id: userData.user.id,
               email: userData.user.email || '',
               name: userData.user.user_metadata?.name || userData.user.email || 'Unknown User',
@@ -146,7 +150,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               email_verified: userData.user.email_confirmed_at ? true : false,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
-            });
+            };
+            
+            await safeInsert('profiles', profileData);
           }
         } catch (createError) {
           console.error("Error creating profile from auth data:", createError);
@@ -179,11 +185,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (data.user) {
         try {
-          const { data: profileData, error: profileError } = await supabase
+          const query = supabase
             .from('profiles')
             .select('*')
             .eq('id', filterById(data.user.id))
             .single();
+            
+          const { data: profileData, error: profileError } = await safeSingleSelect(query);
 
           if (profileError) {
             throw profileError;
@@ -290,10 +298,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (inviteError) {
             console.error("Invitation verification error:", inviteError);
           } else {
-            // Update invitation status
-            const updateResult = await typedUpdate('invitations', { status: 'accepted' })
-              .eq('code', invitationCode as any);
-            
+            // Update invitation status - using simpler approach to avoid type issues
+            const updateData = { status: 'accepted' };
+            await safeUpdate('invitations', updateData, 'code', invitationCode);
             console.log("Invitation accepted successfully");
           }
         } catch (inviteError) {
@@ -303,11 +310,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Check if the profile was created by the trigger
       try {
-        const { data: profileData, error: profileFetchError } = await supabase
+        const query = supabase
           .from('profiles')
           .select('*')
           .eq('id', filterById(data.user.id))
           .maybeSingle();
+          
+        const { data: profileData, error: profileFetchError } = await safeSingleSelect(query);
   
         if (profileFetchError) {
           console.error("Error fetching profile after registration:", profileFetchError);
@@ -317,7 +326,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!profileData) {
           console.log("Profile not found, creating manually");
           // Create profile using helper
-          const insertResult = await typedInsert('profiles', {
+          const profileToInsert = {
             id: data.user.id,
             email: email,
             name: name,
@@ -326,7 +335,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             email_verified: false,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
-          });
+          };
+          
+          await safeInsert('profiles', profileToInsert);
           
           const fallbackUser: User = {
             id: data.user.id,
@@ -503,7 +514,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return false;
       }
 
-      return Boolean(data);
+      return castToBoolean(data);
     } catch (error) {
       console.error("Permission check error:", error);
       return false;
@@ -543,4 +554,3 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
-
