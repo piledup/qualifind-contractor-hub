@@ -19,13 +19,6 @@ export const supabase = createClient<Database>(
       detectSessionInUrl: true,
       storage: localStorage,
       flowType: 'pkce',
-      // Add options for redirecting after email verification
-      // Use correct property names from Supabase v2
-      cookieOptions: {
-        // Using the site URL set in config.toml
-        domain: window.location.hostname,
-        sameSite: 'lax'
-      }
     }
   }
 );
@@ -37,9 +30,27 @@ export const handleSupabaseError = (error: any) => {
   return errorMessage;
 };
 
-// Type-safe query helpers to handle database return types properly
+// Type-safe query helper for selecting data properly
 export const typedSelect = async <T>(
-  query: Promise<{ data: T | null; error: any }>
+  query: Promise<any>
+): Promise<T> => {
+  const { data, error } = await query;
+  
+  if (error) {
+    console.error("Supabase query error:", error);
+    throw error;
+  }
+  
+  if (!data) {
+    throw new Error("No data returned from query");
+  }
+  
+  return data as T;
+};
+
+// Helper for safely getting a single row, with type safety and error handling
+export const typedSelectSingle = async <T>(
+  query: Promise<any>
 ): Promise<T> => {
   const { data, error } = await query;
   
@@ -85,4 +96,20 @@ export const castToBoolean = (value: any): boolean => {
   if (typeof value === 'boolean') return value;
   if (value === null || value === undefined) return false;
   return Boolean(value);
+};
+
+// Helper for safely handling Supabase database record conversions to their TypeScript types
+export const convertDbProfileToUser = (profileData: any): any => {
+  if (!profileData) return null;
+  
+  return {
+    id: profileData.id,
+    email: profileData.email,
+    name: profileData.name,
+    role: profileData.role,
+    companyName: profileData.company_name || '',
+    createdAt: new Date(profileData.created_at),
+    emailVerified: profileData.email_verified || false,
+    lastSignIn: profileData.last_sign_in ? new Date(profileData.last_sign_in) : undefined
+  };
 };

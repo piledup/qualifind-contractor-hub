@@ -1,7 +1,14 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { User, UserRole } from "../types";
-import { supabase, filterById, typedInsert, typedUpdate, castToBoolean } from "@/integrations/supabase/client";
+import { 
+  supabase, 
+  filterById, 
+  typedInsert, 
+  typedUpdate, 
+  castToBoolean, 
+  convertDbProfileToUser 
+} from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
 
 interface AuthContextType {
@@ -103,16 +110,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (data) {
         console.log("User profile fetched:", data);
-        const user: User = {
-          id: data.id,
-          email: data.email,
-          name: data.name,
-          role: data.role as UserRole,
-          companyName: data.company_name || '',
-          createdAt: new Date(data.created_at),
-          emailVerified: data.email_verified || false,
-          lastSignIn: data.last_sign_in ? new Date(data.last_sign_in) : undefined
-        };
+        // Convert database profile to User type
+        const user = convertDbProfileToUser(data);
         setCurrentUser(user);
       } else {
         console.warn("No profile found for user:", userId);
@@ -179,40 +178,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data.user) {
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', filterById(data.user.id))
-          .single();
+        try {
+          const { data: profileData, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', filterById(data.user.id))
+            .single();
 
-        if (profileError) {
-          throw profileError;
-        }
+          if (profileError) {
+            throw profileError;
+          }
 
-        if (profileData && profileData.role !== role) {
-          await supabase.auth.signOut();
-          toast({
-            title: "Access denied",
-            description: `This account is not registered as a ${role.replace('-', ' ')}.`,
-            variant: "destructive"
-          });
-          setCurrentUser(null);
+          if (profileData && profileData.role !== role) {
+            await supabase.auth.signOut();
+            toast({
+              title: "Access denied",
+              description: `This account is not registered as a ${role.replace('-', ' ')}.`,
+              variant: "destructive"
+            });
+            setCurrentUser(null);
+            return null;
+          }
+
+          if (profileData) {
+            // Convert database profile to User type
+            const user = convertDbProfileToUser(profileData);
+            setCurrentUser(user);
+            return user;
+          }
+        } catch (profileErr) {
+          console.error("Profile fetch error:", profileErr);
           return null;
-        }
-
-        if (profileData) {
-          const user: User = {
-            id: profileData.id,
-            email: profileData.email,
-            name: profileData.name,
-            role: profileData.role as UserRole,
-            companyName: profileData.company_name || '',
-            createdAt: new Date(profileData.created_at),
-            emailVerified: profileData.email_verified || false,
-            lastSignIn: profileData.last_sign_in ? new Date(profileData.last_sign_in) : undefined
-          };
-          setCurrentUser(user);
-          return user;
         }
       }
       return null;
@@ -294,8 +290,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (inviteError) {
             console.error("Invitation verification error:", inviteError);
           } else {
-            // Use the typedUpdate helper for correct typing
-            await typedUpdate('invitations', { status: 'accepted' })
+            // Update invitation status
+            const updateResult = await typedUpdate('invitations', { status: 'accepted' })
               .eq('code', invitationCode as any);
             
             console.log("Invitation accepted successfully");
@@ -306,32 +302,69 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // Check if the profile was created by the trigger
-      const { data: profileData, error: profileFetchError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', filterById(data.user.id))
-        .maybeSingle();
-
-      if (profileFetchError) {
-        console.error("Error fetching profile after registration:", profileFetchError);
-      }
-
-      // If profile doesn't exist, create it manually
-      if (!profileData) {
-        console.log("Profile not found, creating manually");
-        // Use typedInsert helper function for properly typed inserts
-        await typedInsert('profiles', {
-          id: data.user.id,
-          email: email,
-          name: name,
-          role: role,
-          company_name: companyName,
-          email_verified: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-        
-        const fallbackUser: User = {
+      try {
+        const { data: profileData, error: profileFetchError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', filterById(data.user.id))
+          .maybeSingle();
+  
+        if (profileFetchError) {
+          console.error("Error fetching profile after registration:", profileFetchError);
+        }
+  
+        // If profile doesn't exist, create it manually
+        if (!profileData) {
+          console.log("Profile not found, creating manually");
+          // Create profile using helper
+          const insertResult = await typedInsert('profiles', {
+            id: data.user.id,
+            email: email,
+            name: name,
+            role: role,
+            company_name: companyName,
+            email_verified: false,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+          
+          const fallbackUser: User = {
+            id: data.user.id,
+            email: email,
+            name: name,
+            role: role,
+            companyName: companyName,
+            createdAt: new Date(),
+            emailVerified: false
+          };
+          
+          setCurrentUser(fallbackUser);
+          
+          toast({
+            title: "Registration complete",
+            description: "Your account was created successfully. Please check your email for verification.",
+            variant: "default"
+          });
+          
+          return fallbackUser;
+        } else {
+          // Profile was created by the trigger
+          console.log("Profile created by trigger:", profileData);
+          // Convert database profile to User type
+          const user = convertDbProfileToUser(profileData);
+          setCurrentUser(user);
+          
+          toast({
+            title: "Registration successful",
+            description: "Your account has been created successfully. Please check your email for verification."
+          });
+          
+          return user;
+        }
+      } catch (profileError) {
+        console.error("Error handling profile:", profileError);
+        // Return minimal user info from auth
+        const minimalUser: User = {
           id: data.user.id,
           email: email,
           name: name,
@@ -341,37 +374,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           emailVerified: false
         };
         
-        setCurrentUser(fallbackUser);
-        
-        toast({
-          title: "Registration complete",
-          description: "Your account was created successfully. Please check your email for verification.",
-          variant: "default"
-        });
-        
-        return fallbackUser;
-      } else {
-        // Profile was created by the trigger
-        console.log("Profile created by trigger:", profileData);
-        const user: User = {
-          id: profileData.id,
-          email: profileData.email,
-          name: profileData.name,
-          role: profileData.role as UserRole,
-          companyName: profileData.company_name || '',
-          createdAt: new Date(profileData.created_at),
-          emailVerified: profileData.email_verified || false,
-          lastSignIn: profileData.last_sign_in ? new Date(profileData.last_sign_in) : undefined
-        };
-        
-        setCurrentUser(user);
-        
-        toast({
-          title: "Registration successful",
-          description: "Your account has been created successfully. Please check your email for verification."
-        });
-        
-        return user;
+        setCurrentUser(minimalUser);
+        return minimalUser;
       }
       
       // Send verification email
@@ -499,7 +503,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return false;
       }
 
-      return castToBoolean(data);
+      return Boolean(data);
     } catch (error) {
       console.error("Permission check error:", error);
       return false;
@@ -539,3 +543,4 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
+
