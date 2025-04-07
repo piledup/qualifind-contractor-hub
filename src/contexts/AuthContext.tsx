@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { User, UserRole } from "../types";
 import { 
@@ -215,7 +216,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             throw profileError;
           }
 
-          if (profileData && profileData.role !== role) {
+          // Fix the type error for role property access with proper type assertion
+          if (profileData && (profileData as { role: string }).role !== role) {
             await supabase.auth.signOut();
             toast({
               title: "Access denied",
