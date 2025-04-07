@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { User, UserRole } from "../types";
 import { 
@@ -59,9 +58,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return 'general-contractor'; // Default role
       }
       
-      // Fix the type casting by explicitly defining the expected structure
-      const profileData = data as { role: string };
-      const role = profileData.role as UserRole;
+      // Fix the type casting issue with an explicit type assertion
+      const role = (data as { role: string }).role as UserRole;
       return role;
     } catch (error) {
       console.error("Error in getUserRole:", error);
@@ -69,7 +67,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Handle auth state changes, including email confirmations
   useEffect(() => {
     console.log("Setting up auth state listener");
     
