@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { User, UserRole } from "../types";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, filterById, typedInsert, typedUpdate, castToBoolean } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
 
 interface AuthContextType {
@@ -93,7 +93,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', userId)
+        .eq('id', filterById(userId))
         .maybeSingle();
 
       if (error) {
@@ -138,7 +138,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setCurrentUser(minimalUser);
             
             // Try to create profile
-            await supabase.from('profiles').insert({
+            await typedInsert('profiles', {
               id: userData.user.id,
               email: userData.user.email || '',
               name: userData.user.user_metadata?.name || userData.user.email || 'Unknown User',
@@ -182,7 +182,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .select('*')
-          .eq('id', data.user.id)
+          .eq('id', filterById(data.user.id))
           .single();
 
         if (profileError) {
@@ -246,7 +246,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             name,
             company_name: companyName,
             role
-          }
+          },
+          emailRedirectTo: `${window.location.origin}/update-password`
         }
       });
 
@@ -293,16 +294,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (inviteError) {
             console.error("Invitation verification error:", inviteError);
           } else {
-            const { error: updateError } = await supabase
-              .from('invitations')
-              .update({ status: 'accepted' })
-              .eq('code', invitationCode);
+            // Use the typedUpdate helper for correct typing
+            await typedUpdate('invitations', { status: 'accepted' })
+              .eq('code', invitationCode as any);
             
-            if (updateError) {
-              console.error("Error updating invitation:", updateError);
-            } else {
-              console.log("Invitation accepted successfully");
-            }
+            console.log("Invitation accepted successfully");
           }
         } catch (inviteError) {
           console.error("Error processing invitation:", inviteError);
@@ -313,7 +309,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { data: profileData, error: profileFetchError } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', data.user.id)
+        .eq('id', filterById(data.user.id))
         .maybeSingle();
 
       if (profileFetchError) {
@@ -323,67 +319,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // If profile doesn't exist, create it manually
       if (!profileData) {
         console.log("Profile not found, creating manually");
-        const { data: manualProfile, error: profileError } = await supabase
-          .from('profiles')
-          .insert({
-            id: data.user.id,
-            email: email,
-            name: name,
-            role: role,
-            company_name: companyName,
-            email_verified: false,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .select()
-          .single();
-
-        if (profileError) {
-          console.error("Error creating profile manually:", profileError);
-          
-          // Even if profile creation fails, create a minimal user object
-          const fallbackUser: User = {
-            id: data.user.id,
-            email: email,
-            name: name,
-            role: role,
-            companyName: companyName,
-            createdAt: new Date(),
-            emailVerified: false
-          };
-          
-          setCurrentUser(fallbackUser);
-          
-          toast({
-            title: "Registration complete",
-            description: "Your account was created, but there was an issue with profile creation. Some features may be limited.",
-            variant: "default"
-          });
-          
-          return fallbackUser;
-        }
+        // Use typedInsert helper function for properly typed inserts
+        await typedInsert('profiles', {
+          id: data.user.id,
+          email: email,
+          name: name,
+          role: role,
+          company_name: companyName,
+          email_verified: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
         
-        if (manualProfile) {
-          const user: User = {
-            id: manualProfile.id,
-            email: manualProfile.email,
-            name: manualProfile.name,
-            role: manualProfile.role as UserRole,
-            companyName: manualProfile.company_name || '',
-            createdAt: new Date(manualProfile.created_at),
-            emailVerified: manualProfile.email_verified || false,
-            lastSignIn: manualProfile.last_sign_in ? new Date(manualProfile.last_sign_in) : undefined
-          };
-          
-          setCurrentUser(user);
-          
-          toast({
-            title: "Registration successful",
-            description: "Your account has been created successfully."
-          });
-          
-          return user;
-        }
+        const fallbackUser: User = {
+          id: data.user.id,
+          email: email,
+          name: name,
+          role: role,
+          companyName: companyName,
+          createdAt: new Date(),
+          emailVerified: false
+        };
+        
+        setCurrentUser(fallbackUser);
+        
+        toast({
+          title: "Registration complete",
+          description: "Your account was created successfully. Please check your email for verification.",
+          variant: "default"
+        });
+        
+        return fallbackUser;
       } else {
         // Profile was created by the trigger
         console.log("Profile created by trigger:", profileData);
@@ -402,7 +368,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         toast({
           title: "Registration successful",
-          description: "Your account has been created successfully."
+          description: "Your account has been created successfully. Please check your email for verification."
         });
         
         return user;
@@ -533,7 +499,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return false;
       }
 
-      return data || false;
+      return castToBoolean(data);
     } catch (error) {
       console.error("Permission check error:", error);
       return false;

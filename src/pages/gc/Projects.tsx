@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,13 +10,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Building, Plus, Calendar, Users, MoreHorizontal, Briefcase } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase, handleSupabaseError } from "@/integrations/supabase/client";
+import { supabase, handleSupabaseError, filterById, typedInsert } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/ui/use-toast";
 import { Project } from "@/types";
 import { format } from "date-fns";
 
-// Custom hook for fetching projects
 const useProjects = (userId?: string) => {
   return useQuery({
     queryKey: ['projects', userId],
@@ -27,7 +25,7 @@ const useProjects = (userId?: string) => {
       const { data, error } = await supabase
         .from('projects')
         .select('*')
-        .eq('created_by', userId);
+        .eq('created_by', filterById(userId));
         
       if (error) throw error;
       
@@ -48,7 +46,6 @@ const useProjects = (userId?: string) => {
   });
 };
 
-// Custom hook for fetching project subcontractors
 const useProjectSubcontractors = (projectId?: string) => {
   return useQuery({
     queryKey: ['project-subcontractors', projectId],
@@ -61,7 +58,7 @@ const useProjectSubcontractors = (projectId?: string) => {
           *,
           subcontractors:subcontractor_id(id, name, company_name, trade)
         `)
-        .eq('project_id', projectId);
+        .eq('project_id', filterById(projectId));
         
       if (error) throw error;
       return data || [];
@@ -74,14 +71,12 @@ const Projects: React.FC = () => {
   const { currentUser } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   
-  // Fetch projects for this GC
   const { 
     data: projects = [], 
     isLoading: loadingProjects,
     error: projectsError
   } = useProjects(currentUser?.id);
   
-  // Show error toast if there's an issue fetching projects
   React.useEffect(() => {
     if (projectsError) {
       toast({
@@ -92,7 +87,6 @@ const Projects: React.FC = () => {
     }
   }, [projectsError]);
   
-  // Filter projects by search query
   const filteredProjects = projects.filter(project => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
@@ -145,10 +139,8 @@ const Projects: React.FC = () => {
 };
 
 const ProjectCard: React.FC<{ project: Project }> = ({ project }) => {
-  // Fetch subcontractors for this project
   const { data: projectSubs = [] } = useProjectSubcontractors(project.id);
   
-  // Calculate total contract value
   const totalContractValue = projectSubs.reduce(
     (sum, ps) => sum + (ps.contract_amount || 0), 
     0
@@ -289,7 +281,6 @@ const CreateProjectDialog: React.FC = () => {
   
   const queryClient = useQueryClient();
 
-  // Create project mutation
   const createProjectMutation = useMutation({
     mutationFn: async (projectData: {
       name: string;
@@ -300,18 +291,14 @@ const CreateProjectDialog: React.FC = () => {
     }) => {
       if (!currentUser?.id) throw new Error("You must be logged in to create projects");
       
-      const { data, error } = await supabase
-        .from('projects')
-        .insert({
-          name: projectData.name,
-          description: projectData.description,
-          location: projectData.location,
-          start_date: projectData.start_date,
-          budget: projectData.budget ? parseFloat(projectData.budget) : null,
-          created_by: currentUser.id,
-        })
-        .select()
-        .single();
+      const { data, error } = await typedInsert('projects', {
+        name: projectData.name,
+        description: projectData.description,
+        location: projectData.location,
+        start_date: projectData.start_date,
+        budget: projectData.budget ? parseFloat(projectData.budget) : null,
+        created_by: currentUser.id,
+      });
       
       if (error) throw error;
       return data;
@@ -322,7 +309,6 @@ const CreateProjectDialog: React.FC = () => {
         description: "Your new project has been created successfully.",
       });
       
-      // Reset form
       setName("");
       setDescription("");
       setLocation("");
@@ -330,7 +316,6 @@ const CreateProjectDialog: React.FC = () => {
       setBudget("");
       setOpen(false);
       
-      // Refetch projects
       queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
     onError: (error: any) => {
