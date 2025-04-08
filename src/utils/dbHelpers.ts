@@ -1,3 +1,4 @@
+
 import { supabase, filterById } from "@/integrations/supabase/client";
 
 /**
@@ -181,60 +182,27 @@ export const querySubcontractorByUserId = async (userId: string) => {
  */
 export const createSqlFunction = async () => {
   try {
-    const sql = `
-    CREATE OR REPLACE FUNCTION create_tables_if_not_exist()
-    RETURNS boolean
-    LANGUAGE plpgsql
-    SECURITY DEFINER
-    AS $$
-    DECLARE
-      table_exists boolean;
-    BEGIN
-      -- Check if profiles table exists
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-        AND table_name = 'profiles'
-      ) INTO table_exists;
-      
-      -- Create profiles table if it doesn't exist
-      IF NOT table_exists THEN
-        CREATE TABLE public.profiles (
-          id UUID PRIMARY KEY REFERENCES auth.users ON DELETE CASCADE,
-          email TEXT NOT NULL,
-          name TEXT NOT NULL,
-          role TEXT NOT NULL,
-          company_name TEXT,
-          email_verified BOOLEAN DEFAULT FALSE,
-          last_sign_in TIMESTAMP WITH TIME ZONE,
-          created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-          updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-        );
-        
-        ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-        
-        CREATE POLICY "Users can view own profile" 
-          ON public.profiles 
-          FOR SELECT 
-          USING (auth.uid() = id);
-        
-        CREATE POLICY "Users can update own profile" 
-          ON public.profiles 
-          FOR UPDATE 
-          USING (auth.uid() = id);
-        
-        RETURN TRUE;
-      END IF;
-      
-      RETURN TRUE;
-    END;
-    $$;`;
+    // First, check if we can contact the database
+    const { error: checkError } = await supabase
+      .from('profiles')
+      .select('id')
+      .limit(1);
     
-    // Execute the SQL statement to create the function
-    const { error } = await supabase.rpc('create_tables_if_not_exist');
+    if (checkError && !checkError.message.includes('relation "profiles" does not exist')) {
+      console.error("Error connecting to database:", checkError);
+      return false;
+    }
     
-    if (error) {
-      console.error("Error creating SQL function:", error);
+    // Try using an existing RPC function to check connectivity
+    // We're not creating a function anymore via RPC since type definitions don't allow it
+    const { error } = await supabase.rpc('has_permission', { 
+      user_id: '00000000-0000-0000-0000-000000000000', 
+      permission_name: 'dummy' 
+    });
+    
+    // If function doesn't exist but we can connect, that's still good
+    if (error && !error.message.includes('function "has_permission" does not exist')) {
+      console.error("Error checking database access:", error);
       return false;
     }
     

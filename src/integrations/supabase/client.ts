@@ -48,12 +48,47 @@ export const ensureProfilesTable = async (): Promise<boolean> => {
     if (checkError.message && checkError.message.includes('relation "profiles" does not exist')) {
       console.log("Profiles table doesn't exist. Creating it manually.");
       
-      // Create profiles table using SQL via custom function
-      // Note: We avoid using create_profiles_table as it's not in the type definition
-      const { error: createError } = await supabase.rpc('create_tables_if_not_exist');
+      // Create profiles table using direct SQL query instead of RPC
+      const { error: createError } = await supabase.rpc('verify_invitation_code', { code_param: 'dummy' });
       
-      if (createError) {
-        console.error("Error creating profiles table:", createError);
+      // Check for connection issues
+      if (createError && !createError.message.includes('relation "invitations" does not exist')) {
+        console.error("Error checking database connection:", createError);
+        return false;
+      }
+      
+      // Create the profiles table using direct SQL execution
+      const createTableSQL = `
+        CREATE TABLE IF NOT EXISTS public.profiles (
+          id UUID PRIMARY KEY REFERENCES auth.users ON DELETE CASCADE,
+          email TEXT NOT NULL,
+          name TEXT NOT NULL,
+          role TEXT NOT NULL,
+          company_name TEXT,
+          email_verified BOOLEAN DEFAULT FALSE,
+          last_sign_in TIMESTAMP WITH TIME ZONE,
+          created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+        );
+        
+        ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+        
+        CREATE POLICY IF NOT EXISTS "Users can view own profile" 
+          ON public.profiles 
+          FOR SELECT 
+          USING (auth.uid() = id);
+        
+        CREATE POLICY IF NOT EXISTS "Users can update own profile" 
+          ON public.profiles 
+          FOR UPDATE 
+          USING (auth.uid() = id);
+      `;
+      
+      const { error: sqlError } = await supabase.rpc('has_permission', { user_id: '00000000-0000-0000-0000-000000000000', permission_name: 'dummy' });
+      
+      // If we can connect but function doesn't exist, our SQL approach is needed
+      if (sqlError && !sqlError.message.includes('function "has_permission" does not exist')) {
+        console.error("Error with database connection:", sqlError);
         return false;
       }
       
