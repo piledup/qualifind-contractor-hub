@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -41,13 +42,13 @@ const Login: React.FC = () => {
     try {
       console.log("Attempting login with:", { email, role });
       
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password
       });
       
-      if (error) {
-        throw error;
+      if (authError) {
+        throw authError;
       }
       
       if (!data.user) {
@@ -56,66 +57,24 @@ const Login: React.FC = () => {
       
       console.log("Successfully signed in with Supabase:", data.user);
       
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', data.user.id)
-        .maybeSingle();
-        
-      if (profileError) {
-        console.error("Error fetching profile:", profileError);
-      }
+      // Attempt to login with our context
+      const loginResult = await login(email, password, role);
       
-      console.log("Profile data:", profileData);
-      
-      if (profileData && profileData.role !== role) {
+      if (!loginResult) {
+        // If login failed, sign out and return an error
         await supabase.auth.signOut();
-        setError(`This account is not registered as a ${role.replace('-', ' ')}.`);
-        setLoading(false);
-        return;
+        throw new Error(`Login failed. This account may not be registered as a ${role.replace('-', ' ')}.`);
       }
       
-      if (profileData) {
-        const loginResult = await login(email, password, role);
-        
-        if (loginResult) {
-          toast({
-            title: "Login successful",
-            description: `Welcome back, ${loginResult.name}!`
-          });
-          
-          if (loginResult.role === "general-contractor") {
-            navigate("/dashboard");
-          } else {
-            navigate("/sub-dashboard");
-          }
-        }
+      toast({
+        title: "Login successful",
+        description: `Welcome back, ${loginResult.name}!`
+      });
+      
+      if (loginResult.role === "general-contractor") {
+        navigate("/dashboard");
       } else {
-        const loginResult = await login(email, password, role);
-        
-        if (loginResult) {
-          await supabase.from('profiles').insert({
-            id: data.user.id,
-            email: data.user.email || '',
-            name: data.user.user_metadata?.name || 'User',
-            role: role,
-            company_name: data.user.user_metadata?.company_name || '',
-            email_verified: data.user.email_confirmed_at ? true : false,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          });
-          
-          toast({
-            title: "Login successful",
-            description: `Welcome, ${loginResult.name}!`
-          });
-          
-          if (role === "general-contractor") {
-            navigate("/dashboard");
-          } else {
-            navigate("/sub-dashboard");
-          }
-        }
+        navigate("/sub-dashboard");
       }
     } catch (err: any) {
       console.error("Login error:", err);

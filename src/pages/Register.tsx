@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -98,35 +97,6 @@ const Register: React.FC = () => {
     }
   }, [isAuthenticated, currentUser, navigate]);
   
-  const handleManualProfileCreation = async (userId: string, userData: RegisterFormValues, role: UserRole) => {
-    console.log("Creating profile manually for user:", userId);
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .insert({
-          id: userId,
-          email: userData.email,
-          name: userData.name,
-          company_name: userData.companyName,
-          role: role,
-          email_verified: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-      
-      if (error) {
-        console.error("Error creating profile manually:", error);
-        return false;
-      }
-      
-      console.log("Profile created successfully:", data);
-      return true;
-    } catch (err) {
-      console.error("Exception in manual profile creation:", err);
-      return false;
-    }
-  };
-  
   const onSubmit = async (formData: RegisterFormValues) => {
     setRegisterError(null);
     setLoading(true);
@@ -144,61 +114,8 @@ const Register: React.FC = () => {
         description: "Setting up your account. This might take a moment...",
       });
       
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          data: {
-            name: formData.name,
-            company_name: formData.companyName,
-            role: invitationData ? 'subcontractor' as UserRole : formData.role
-          },
-          emailRedirectTo: `${window.location.origin}/update-password`
-        }
-      });
-      
-      if (authError) {
-        throw authError;
-      }
-      
-      if (!authData.user) {
-        throw new Error("Failed to create user");
-      }
-      
-      console.log("User created in auth system:", authData.user.id);
-      
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      const { data: profileData, error: profileCheckError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', authData.user.id)
-        .maybeSingle();
-      
-      console.log("Profile check result:", profileData, profileCheckError);
-      
-      if (!profileData) {
-        console.log("Profile not found, creating manually");
-        const roleToUse = invitationData ? 'subcontractor' as UserRole : formData.role;
-        await handleManualProfileCreation(authData.user.id, formData, roleToUse);
-      }
-      
-      if (invitationData) {
-        console.log("Processing invitation data:", invitationData);
-        const { error: inviteUpdateError } = await supabase
-          .from('invitations')
-          .update({ status: 'accepted' })
-          .eq('code', invitationData.code);
-        
-        if (inviteUpdateError) {
-          console.error("Error updating invitation status:", inviteUpdateError);
-        } else {
-          localStorage.removeItem('invitationData');
-        }
-      }
-      
       // Use the registerUser method from AuthContext
-      await registerUser(
+      const user = await registerUser(
         formData.email,
         formData.password,
         formData.name,
@@ -208,13 +125,30 @@ const Register: React.FC = () => {
         invitationData?.code
       );
       
-      setShowVerificationBanner(true);
-      
-      toast({
-        title: "Registration successful",
-        description: "Your account has been created. Please verify your email."
-      });
-      
+      if (user) {
+        if (invitationData) {
+          console.log("Processing invitation data:", invitationData);
+          const { error: inviteUpdateError } = await supabase
+            .from('invitations')
+            .update({ status: 'accepted' })
+            .eq('code', invitationData.code);
+          
+          if (inviteUpdateError) {
+            console.error("Error updating invitation status:", inviteUpdateError);
+          } else {
+            localStorage.removeItem('invitationData');
+          }
+        }
+        
+        setShowVerificationBanner(true);
+        
+        toast({
+          title: "Registration successful",
+          description: "Your account has been created. Please verify your email."
+        });
+      } else {
+        throw new Error("Failed to register user");
+      }
     } catch (err: any) {
       console.error("Registration error:", err);
       
