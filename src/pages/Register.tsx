@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -22,6 +21,7 @@ import {
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { supabase } from "@/integrations/supabase/client";
 
 // Form schema with validation
 const registerSchema = z.object({
@@ -50,7 +50,6 @@ const Register: React.FC = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
   
-  // Initialize the form
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
@@ -98,8 +97,36 @@ const Register: React.FC = () => {
     }
   }, [isAuthenticated, currentUser, navigate]);
   
+  const handleManualProfileCreation = async (userId: string, userData: RegisterFormValues, role: UserRole) => {
+    console.log("Creating profile manually for user:", userId);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .insert({
+          id: userId,
+          email: userData.email,
+          name: userData.name,
+          company_name: userData.companyName,
+          role: role,
+          email_verified: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+      
+      if (error) {
+        console.error("Error creating profile manually:", error);
+        return false;
+      }
+      
+      console.log("Profile created successfully:", data);
+      return true;
+    } catch (err) {
+      console.error("Exception in manual profile creation:", err);
+      return false;
+    }
+  };
+  
   const onSubmit = async (formData: RegisterFormValues) => {
-    // Clear any previous errors
     setRegisterError(null);
     setLoading(true);
     
@@ -111,60 +138,82 @@ const Register: React.FC = () => {
         role: invitationData ? 'subcontractor' as UserRole : formData.role 
       });
       
-      // Show a loading toast
       toast({
         title: "Creating account",
         description: "Setting up your account. This might take a moment...",
       });
       
-      let user;
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            name: formData.name,
+            company_name: formData.companyName,
+            role: invitationData ? 'subcontractor' as UserRole : formData.role
+          },
+          emailRedirectTo: `${window.location.origin}/update-password`
+        }
+      });
+      
+      if (authError) {
+        throw authError;
+      }
+      
+      if (!authData.user) {
+        throw new Error("Failed to create user");
+      }
+      
+      console.log("User created in auth system:", authData.user.id);
+      
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      const { data: profileData, error: profileCheckError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', authData.user.id)
+        .maybeSingle();
+      
+      console.log("Profile check result:", profileData, profileCheckError);
+      
+      if (!profileData) {
+        console.log("Profile not found, creating manually");
+        const roleToUse = invitationData ? 'subcontractor' as UserRole : formData.role;
+        await handleManualProfileCreation(authData.user.id, formData, roleToUse);
+      }
       
       if (invitationData) {
-        console.log("Registering with invitation data:", invitationData);
-        user = await registerUser(
-          formData.email, 
-          formData.password, 
-          formData.name, 
-          formData.companyName, 
-          'subcontractor' as UserRole,
-          invitationData.generalContractorId,
-          invitationData.code
-        );
-      } else {
-        console.log("Registering without invitation");
-        user = await registerUser(
-          formData.email, 
-          formData.password, 
-          formData.name, 
-          formData.companyName, 
-          formData.role
-        );
-      }
-      
-      console.log("Registration result:", user);
-      
-      if (user) {
-        console.log("User registered successfully:", user);
+        console.log("Processing invitation data:", invitationData);
+        const { error: inviteUpdateError } = await supabase
+          .from('invitations')
+          .update({ status: 'accepted' })
+          .eq('code', invitationData.code);
         
-        if (invitationData) {
+        if (inviteUpdateError) {
+          console.error("Error updating invitation status:", inviteUpdateError);
+        } else {
           localStorage.removeItem('invitationData');
         }
-        
-        setShowVerificationBanner(true);
-        
-        toast({
-          title: "Registration successful",
-          description: "Your account has been created successfully.",
-        });
-      } else {
-        setRegisterError("Registration failed. Please try a different email address or contact support.");
-        
-        toast({
-          title: "Registration failed",
-          description: "There was a problem creating your account. Please try again with a different email.",
-          variant: "destructive"
-        });
       }
+      
+      let user = {
+        id: authData.user.id,
+        email: formData.email,
+        name: formData.name,
+        role: invitationData ? 'subcontractor' as UserRole : formData.role,
+        companyName: formData.companyName,
+        createdAt: new Date(),
+        emailVerified: false
+      };
+      
+      setCurrentUser(user);
+      setShowVerificationBanner(true);
+      
+      toast({
+        title: "Registration successful",
+        description: "Your account has been created. Please verify your email."
+      });
+      
     } catch (err: any) {
       console.error("Registration error:", err);
       
