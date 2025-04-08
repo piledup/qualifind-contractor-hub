@@ -9,9 +9,10 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { UserRole } from "@/types";
 import { toast } from "@/components/ui/use-toast";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
+import { ensureTablesExist, checkProfileExists } from "@/utils/dbSetup";
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -23,6 +24,8 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [isResendingEmail, setIsResendingEmail] = useState(false);
+  const [checkingDatabaseTables, setCheckingDatabaseTables] = useState(false);
+  const [dbSetupResult, setDbSetupResult] = useState<string | null>(null);
   
   useEffect(() => {
     if (isAuthenticated && currentUser) {
@@ -34,6 +37,36 @@ const Login: React.FC = () => {
     }
   }, [isAuthenticated, currentUser, navigate]);
   
+  const checkDbSetup = async () => {
+    setCheckingDatabaseTables(true);
+    try {
+      const result = await ensureTablesExist();
+      setDbSetupResult(result.message);
+      
+      if (result.success) {
+        toast({
+          title: "Database verification",
+          description: result.message
+        });
+      } else {
+        toast({
+          title: "Database verification failed",
+          description: result.message,
+          variant: "destructive"
+        });
+      }
+    } catch (err: any) {
+      setDbSetupResult(`Error: ${err.message}`);
+      toast({
+        title: "Database verification error",
+        description: err.message,
+        variant: "destructive"
+      });
+    } finally {
+      setCheckingDatabaseTables(false);
+    }
+  };
+  
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -41,6 +74,12 @@ const Login: React.FC = () => {
     
     try {
       console.log("Attempting login with:", { email, role });
+      
+      // First check if database tables exist
+      const dbCheck = await ensureTablesExist();
+      if (!dbCheck.success) {
+        console.warn("Database setup issue:", dbCheck.message);
+      }
       
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email,
@@ -56,6 +95,30 @@ const Login: React.FC = () => {
       }
       
       console.log("Successfully signed in with Supabase:", data.user);
+      
+      // Check if profile exists
+      const profileExists = await checkProfileExists(data.user.id);
+      if (!profileExists) {
+        console.warn("Profile doesn't exist for user. Attempting to create one.");
+        
+        // Create profile for the user if it doesn't exist
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert({
+            id: data.user.id,
+            email: data.user.email || email,
+            name: data.user.user_metadata?.name || email,
+            role: role,
+            company_name: data.user.user_metadata?.company_name || '',
+            email_verified: data.user.email_confirmed_at ? true : false,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+          
+        if (profileError) {
+          console.error("Error creating profile during login:", profileError);
+        }
+      }
       
       // Attempt to login with our context
       const loginResult = await login(email, password, role);
@@ -162,6 +225,12 @@ const Login: React.FC = () => {
                 </Alert>
               )}
               
+              {dbSetupResult && (
+                <Alert variant={dbSetupResult.includes("Error") ? "destructive" : "default"} className="text-sm">
+                  <AlertDescription>{dbSetupResult}</AlertDescription>
+                </Alert>
+              )}
+              
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -211,6 +280,24 @@ const Login: React.FC = () => {
                   </div>
                 </RadioGroup>
               </div>
+              
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={checkDbSetup}
+                disabled={checkingDatabaseTables}
+                className="w-full"
+              >
+                {checkingDatabaseTables ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Checking database...
+                  </>
+                ) : (
+                  "Verify Database Setup"
+                )}
+              </Button>
             </CardContent>
             
             <CardFooter className="flex-col space-y-4">
@@ -219,7 +306,14 @@ const Login: React.FC = () => {
                 className="w-full bg-qualifind-blue hover:bg-qualifind-blue/90"
                 disabled={loading}
               >
-                {loading ? "Logging in..." : "Sign In"}
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Logging in...
+                  </>
+                ) : (
+                  "Sign In"
+                )}
               </Button>
               
               <p className="text-sm text-center text-gray-600">

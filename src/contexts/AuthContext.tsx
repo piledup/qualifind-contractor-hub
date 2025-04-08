@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { User, UserRole } from "../types";
 import { 
@@ -290,7 +289,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) {
         console.error("Registration error:", error);
         
-        // More descriptive user-facing error
         let errorMessage = error.message;
         if (error.message.includes('already registered')) {
           errorMessage = "This email address is already registered. Please login instead.";
@@ -317,8 +315,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       console.log("Auth signup successful, user created:", data.user.id);
 
-      // Wait for the database trigger to create the profile
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // IMPORTANT: Explicitly create the profile instead of relying on trigger
+      try {
+        console.log("Manually creating profile for user:", data.user.id);
+        
+        // Wait a brief moment to ensure auth user is fully created
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        const profileData = {
+          id: data.user.id,
+          email: email,
+          name: name,
+          role: role,
+          company_name: companyName,
+          email_verified: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        
+        const { data: profileResult, error: profileError } = await supabase
+          .from('profiles')
+          .insert(profileData)
+          .select('*')
+          .single();
+          
+        if (profileError) {
+          console.error("Error creating profile:", profileError);
+          
+          // If we get an error because the profile already exists, try to fetch it
+          if (profileError.message.includes('duplicate key')) {
+            console.log("Profile may already exist. Attempting to fetch it.");
+          } else {
+            throw profileError;
+          }
+        }
+        
+        console.log("Profile created successfully:", profileResult);
+      } catch (profileCreationError) {
+        console.error("Profile creation error:", profileCreationError);
+        // Continue with registration even if profile creation fails
+        // We'll handle fetching/creating the profile when the user logs in
+      }
 
       // Process invitation if it exists
       if (invitationCode && role === 'subcontractor') {
@@ -340,59 +377,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      // Check if the profile was created by the trigger
+      // Attempt to fetch the profile to confirm it exists
       try {
-        const query = supabase
+        const { data: profileData, error: profileFetchError } = await supabase
           .from('profiles')
           .select('*')
-          .eq('id', filterById(data.user.id))
+          .eq('id', data.user.id)
           .maybeSingle();
           
-        const { data: profileData, error: profileFetchError } = await safeSingleSelect(query);
-  
         if (profileFetchError) {
-          console.error("Error fetching profile after registration:", profileFetchError);
+          console.error("Error fetching profile after creation:", profileFetchError);
         }
-  
-        // If profile doesn't exist, create it manually
-        if (!profileData) {
-          console.log("Profile not found, creating manually");
-          // Create profile using helper
-          const profileToInsert = {
-            id: data.user.id,
-            email: email,
-            name: name,
-            role: role,
-            company_name: companyName,
-            email_verified: false,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          };
-          
-          await safeInsert('profiles', profileToInsert);
-          
-          const fallbackUser: User = {
-            id: data.user.id,
-            email: email,
-            name: name,
-            role: role,
-            companyName: companyName,
-            createdAt: new Date(),
-            emailVerified: false
-          };
-          
-          setCurrentUser(fallbackUser);
-          
-          toast({
-            title: "Registration complete",
-            description: "Your account was created successfully. Please check your email for verification.",
-            variant: "default"
-          });
-          
-          return fallbackUser;
-        } else {
-          // Profile was created by the trigger
-          console.log("Profile created by trigger:", profileData);
+        
+        if (profileData) {
+          console.log("Profile fetched successfully:", profileData);
           // Convert database profile to User type
           const user = convertDbProfileToUser(profileData);
           setCurrentUser(user);
@@ -403,23 +401,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
           
           return user;
+        } else {
+          console.warn("Profile not found after creation. Using fallback user data.");
         }
-      } catch (profileError) {
-        console.error("Error handling profile:", profileError);
-        // Return minimal user info from auth
-        const minimalUser: User = {
-          id: data.user.id,
-          email: email,
-          name: name,
-          role: role,
-          companyName: companyName,
-          createdAt: new Date(),
-          emailVerified: false
-        };
-        
-        setCurrentUser(minimalUser);
-        return minimalUser;
+      } catch (profileFetchError) {
+        console.error("Error fetching profile after creation:", profileFetchError);
       }
+      
+      // Fallback: Return basic user info if profile fetch fails
+      const fallbackUser: User = {
+        id: data.user.id,
+        email: email,
+        name: name,
+        role: role,
+        companyName: companyName,
+        createdAt: new Date(),
+        emailVerified: false
+      };
+      
+      setCurrentUser(fallbackUser);
+      
+      toast({
+        title: "Registration complete",
+        description: "Your account was created successfully. Please check your email for verification.",
+        variant: "default"
+      });
       
       // Send verification email
       if (data.user.email) {
@@ -432,7 +438,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
       
-      return null;
+      return fallbackUser;
     } catch (error: any) {
       console.error("Registration error:", error);
       toast({

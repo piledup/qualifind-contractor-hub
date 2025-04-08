@@ -30,6 +30,44 @@ export const handleSupabaseError = (error: any) => {
   return errorMessage;
 };
 
+// Helper to check if the profiles table exists and create it if needed
+export const ensureProfilesTable = async (): Promise<boolean> => {
+  try {
+    // First, try to access profiles to see if table exists
+    const { error: checkError } = await supabase
+      .from('profiles')
+      .select('id')
+      .limit(1);
+      
+    // If no error, table exists
+    if (!checkError) {
+      return true;
+    }
+    
+    // If table doesn't exist, error will be "relation profiles does not exist"
+    if (checkError.message.includes('relation "profiles" does not exist')) {
+      console.log("Profiles table doesn't exist. Creating it manually.");
+      
+      // Create profiles table using SQL
+      // Note: This requires special privileges, might not work with normal clients
+      // This is a fallback approach
+      const { error: createError } = await supabase.rpc('create_profiles_table');
+      
+      if (createError) {
+        console.error("Error creating profiles table:", createError);
+        return false;
+      }
+      
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error("Error in ensureProfilesTable:", error);
+    return false;
+  }
+};
+
 // Type-safe query helper for selecting data
 export const safeSelect = async <T>(query: any): Promise<{data: T | null, error: any}> => {
   try {
