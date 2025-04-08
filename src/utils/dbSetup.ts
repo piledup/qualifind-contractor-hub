@@ -1,27 +1,27 @@
 
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
-// Utility function to check if tables exist and create them if needed
+// Utility function to check if profiles table exists and create it if needed
 export const ensureTablesExist = async (): Promise<{ success: boolean, message: string }> => {
   try {
-    // Check if profiles table exists
-    const { data: tablesData, error: tablesError } = await supabase
-      .from('information_schema.tables')
-      .select('table_name')
-      .eq('table_schema', 'public')
-      .eq('table_name', 'profiles')
-      .single();
+    // Try to query the profiles table directly - if it exists, this will succeed
+    const { error } = await supabase
+      .from('profiles')
+      .select('id')
+      .limit(1);
     
-    if (tablesError) {
-      console.error("Error checking if tables exist:", tablesError);
-      return { success: false, message: `Error checking tables: ${tablesError.message}` };
+    // If no error, the table exists
+    if (!error) {
+      return { success: true, message: "All required tables already exist" };
     }
     
-    // If profiles table doesn't exist, create it
-    if (!tablesData) {
-      console.log("Profiles table doesn't exist. Creating it...");
+    // If error contains "relation profiles does not exist", we need to create it
+    if (error.message && error.message.includes('relation "profiles" does not exist')) {
+      console.log("Profiles table doesn't exist. Creating it via SQL...");
       
-      const { error: createError } = await supabase.rpc('create_profiles_table');
+      // Run SQL to create the profiles table
+      const { error: createError } = await supabase.rpc('create_tables_if_not_exist');
       
       if (createError) {
         console.error("Error creating profiles table:", createError);
@@ -31,7 +31,7 @@ export const ensureTablesExist = async (): Promise<{ success: boolean, message: 
       return { success: true, message: "Profiles table created successfully" };
     }
     
-    return { success: true, message: "All required tables already exist" };
+    return { success: false, message: `Unexpected error checking tables: ${error.message}` };
   } catch (error: any) {
     console.error("Error in ensureTablesExist:", error);
     return { success: false, message: `Error checking/creating tables: ${error.message}` };
@@ -56,5 +56,63 @@ export const checkProfileExists = async (userId: string): Promise<boolean> => {
   } catch (error) {
     console.error("Error in checkProfileExists:", error);
     return false;
+  }
+};
+
+// Function to manually create a profile
+export const createProfile = async (userData: {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  company_name?: string;
+}): Promise<{ success: boolean; message: string }> => {
+  try {
+    const { error } = await supabase.from('profiles').insert({
+      id: userData.id,
+      email: userData.email,
+      name: userData.name,
+      role: userData.role,
+      company_name: userData.company_name,
+      email_verified: false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
+
+    if (error) {
+      console.error("Error creating profile:", error);
+      return { success: false, message: `Failed to create profile: ${error.message}` };
+    }
+
+    return { success: true, message: "Profile created successfully" };
+  } catch (error: any) {
+    console.error("Error in createProfile:", error);
+    return { success: false, message: `Error creating profile: ${error.message}` };
+  }
+};
+
+// Manual database verification that can be triggered by users
+export const verifyDatabaseSetup = async (): Promise<void> => {
+  try {
+    const result = await ensureTablesExist();
+    
+    if (result.success) {
+      toast({
+        title: "Database verification successful",
+        description: result.message,
+      });
+    } else {
+      toast({
+        variant: "destructive",
+        title: "Database verification failed",
+        description: result.message,
+      });
+    }
+  } catch (error: any) {
+    toast({
+      variant: "destructive",
+      title: "Database verification error",
+      description: error.message || "An unexpected error occurred",
+    });
   }
 };

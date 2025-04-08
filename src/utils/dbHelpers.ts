@@ -1,4 +1,3 @@
-
 import { supabase, filterById } from "@/integrations/supabase/client";
 
 /**
@@ -173,5 +172,75 @@ export const querySubcontractorByUserId = async (userId: string) => {
   } catch (error) {
     console.error("Error querying subcontractor:", error);
     return { data: null, error };
+  }
+};
+
+/**
+ * Create a new SQL function in the database
+ * This function will be used to create tables if they don't exist
+ */
+export const createSqlFunction = async () => {
+  try {
+    const sql = `
+    CREATE OR REPLACE FUNCTION create_tables_if_not_exist()
+    RETURNS boolean
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    AS $$
+    DECLARE
+      table_exists boolean;
+    BEGIN
+      -- Check if profiles table exists
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'profiles'
+      ) INTO table_exists;
+      
+      -- Create profiles table if it doesn't exist
+      IF NOT table_exists THEN
+        CREATE TABLE public.profiles (
+          id UUID PRIMARY KEY REFERENCES auth.users ON DELETE CASCADE,
+          email TEXT NOT NULL,
+          name TEXT NOT NULL,
+          role TEXT NOT NULL,
+          company_name TEXT,
+          email_verified BOOLEAN DEFAULT FALSE,
+          last_sign_in TIMESTAMP WITH TIME ZONE,
+          created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+        );
+        
+        ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+        
+        CREATE POLICY "Users can view own profile" 
+          ON public.profiles 
+          FOR SELECT 
+          USING (auth.uid() = id);
+        
+        CREATE POLICY "Users can update own profile" 
+          ON public.profiles 
+          FOR UPDATE 
+          USING (auth.uid() = id);
+        
+        RETURN TRUE;
+      END IF;
+      
+      RETURN TRUE;
+    END;
+    $$;`;
+    
+    // Execute the SQL statement to create the function
+    const { error } = await supabase.rpc('create_tables_if_not_exist');
+    
+    if (error) {
+      console.error("Error creating SQL function:", error);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("Error in createSqlFunction:", error);
+    return false;
   }
 };

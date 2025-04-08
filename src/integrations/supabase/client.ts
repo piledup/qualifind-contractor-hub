@@ -45,13 +45,12 @@ export const ensureProfilesTable = async (): Promise<boolean> => {
     }
     
     // If table doesn't exist, error will be "relation profiles does not exist"
-    if (checkError.message.includes('relation "profiles" does not exist')) {
+    if (checkError.message && checkError.message.includes('relation "profiles" does not exist')) {
       console.log("Profiles table doesn't exist. Creating it manually.");
       
-      // Create profiles table using SQL
-      // Note: This requires special privileges, might not work with normal clients
-      // This is a fallback approach
-      const { error: createError } = await supabase.rpc('create_profiles_table');
+      // Create profiles table using SQL via custom function
+      // Note: We avoid using create_profiles_table as it's not in the type definition
+      const { error: createError } = await supabase.rpc('create_tables_if_not_exist');
       
       if (createError) {
         console.error("Error creating profiles table:", createError);
