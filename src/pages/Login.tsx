@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -87,7 +88,8 @@ const Login: React.FC = () => {
           lastSignIn: profileData.last_sign_in ? new Date(profileData.last_sign_in) : undefined
         };
         
-        setCurrentUser(user);
+        // Instead of using setCurrentUser, use login from AuthContext
+        await login(email, password, role);
         
         toast({
           title: "Login successful",
@@ -110,7 +112,8 @@ const Login: React.FC = () => {
           emailVerified: data.user.email_confirmed_at ? true : false
         };
         
-        setCurrentUser(fallbackUser);
+        // Instead of using setCurrentUser, use login from AuthContext
+        await login(email, password, role);
         
         await supabase.from('profiles').insert({
           id: data.user.id,

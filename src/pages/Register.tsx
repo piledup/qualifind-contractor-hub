@@ -196,17 +196,16 @@ const Register: React.FC = () => {
         }
       }
       
-      let user = {
-        id: authData.user.id,
-        email: formData.email,
-        name: formData.name,
-        role: invitationData ? 'subcontractor' as UserRole : formData.role,
-        companyName: formData.companyName,
-        createdAt: new Date(),
-        emailVerified: false
-      };
+      const user = await registerUser(
+        formData.email,
+        formData.password,
+        formData.name,
+        formData.companyName,
+        invitationData ? 'subcontractor' as UserRole : formData.role,
+        invitationData?.generalContractorId,
+        invitationData?.code
+      );
       
-      setCurrentUser(user);
       setShowVerificationBanner(true);
       
       toast({
