@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -22,6 +23,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { supabase } from "@/integrations/supabase/client";
+import { ensureTablesExist } from "@/utils/dbSetup";
 
 // Form schema with validation
 const registerSchema = z.object({
@@ -108,6 +110,19 @@ const Register: React.FC = () => {
         companyName: formData.companyName, 
         role: invitationData ? 'subcontractor' as UserRole : formData.role 
       });
+      
+      // First check if database tables exist
+      const dbCheck = await ensureTablesExist();
+      if (!dbCheck.success) {
+        console.warn("Database setup issue during registration:", dbCheck.message);
+        
+        // If database tables don't exist, we'll still try to register but warn the user
+        toast({
+          title: "Database setup warning",
+          description: "There was an issue with database setup, but registration will continue.",
+          variant: "default"
+        });
+      }
       
       toast({
         title: "Creating account",

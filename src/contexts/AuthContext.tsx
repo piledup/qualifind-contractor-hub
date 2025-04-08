@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { User, UserRole } from "../types";
 import { 
@@ -11,6 +12,7 @@ import {
   convertDbProfileToUser 
 } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
+import { createProfile } from "@/utils/dbSetup";
 
 interface AuthContextType {
   currentUser: User | null;
@@ -139,11 +141,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { data, error } = await safeSingleSelect(query);
 
       if (error) {
-        console.error("Error fetching user profile:", error);
-        throw error;
-      }
-
-      if (data) {
+        if (error.message.includes('relation "profiles" does not exist')) {
+          console.log("Profiles table doesn't exist. Attempting to create a minimal profile.");
+          
+          // Attempt to get basic user info to create a profile
+          try {
+            const { data: userData, error: userError } = await supabase.auth.getUser();
+            
+            if (userError) throw userError;
+            
+            if (userData && userData.user) {
+              // Create a minimal user object from auth data
+              const minimalUser: User = {
+                id: userData.user.id,
+                email: userData.user.email || '',
+                name: userData.user.user_metadata?.name || userData.user.email || 'Unknown User',
+                role: (userData.user.user_metadata?.role as UserRole) || 'general-contractor',
+                companyName: userData.user.user_metadata?.company_name || '',
+                createdAt: new Date(),
+                emailVerified: userData.user.email_confirmed_at ? true : false
+              };
+              
+              setCurrentUser(minimalUser);
+              
+              // Try to create profile
+              const profileData = {
+                id: userData.user.id,
+                email: userData.user.email || '',
+                name: userData.user.user_metadata?.name || userData.user.email || 'Unknown User',
+                role: userData.user.user_metadata?.role || 'general-contractor',
+                company_name: userData.user.user_metadata?.company_name || '',
+              };
+              
+              const createResult = await createProfile(profileData);
+              console.log("Profile creation result:", createResult);
+            }
+          } catch (createError) {
+            console.error("Error creating profile from auth data:", createError);
+          }
+        } else {
+          console.error("Error fetching user profile:", error);
+          throw error;
+        }
+      } else if (data) {
         console.log("User profile fetched:", data);
         // Convert database profile to User type
         const user = convertDbProfileToUser(data);
@@ -178,12 +218,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               name: userData.user.user_metadata?.name || userData.user.email || 'Unknown User',
               role: userData.user.user_metadata?.role || 'general-contractor',
               company_name: userData.user.user_metadata?.company_name || '',
-              email_verified: userData.user.email_confirmed_at ? true : false,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
             };
             
-            await safeInsert('profiles', profileData);
+            const createResult = await createProfile(profileData);
+            console.log("Profile creation result:", createResult);
           }
         } catch (createError) {
           console.error("Error creating profile from auth data:", createError);
@@ -216,16 +254,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (data.user) {
         try {
-          const query = supabase
+          const { data: profileData, error: profileError } = await supabase
             .from('profiles')
             .select('*')
-            .eq('id', filterById(data.user.id))
-            .single();
-            
-          const { data: profileData, error: profileError } = await safeSingleSelect<ProfileData>(query);
+            .eq('id', data.user.id)
+            .maybeSingle();
 
           if (profileError) {
-            throw profileError;
+            if (profileError.message.includes('relation "profiles" does not exist')) {
+              console.log("Profiles table doesn't exist. Creating a minimal profile.");
+              
+              // Create a minimal user based on auth data
+              const minimalUser: User = {
+                id: data.user.id,
+                email: data.user.email || '',
+                name: data.user.user_metadata?.name || data.user.email || 'Unknown User',
+                role: role,
+                companyName: data.user.user_metadata?.company_name || '',
+                createdAt: new Date(),
+                emailVerified: data.user.email_confirmed_at ? true : false
+              };
+              
+              setCurrentUser(minimalUser);
+              
+              // Try to create profile
+              const profileData = {
+                id: data.user.id,
+                email: data.user.email || '',
+                name: data.user.user_metadata?.name || data.user.email || 'Unknown User',
+                role: role,
+                company_name: data.user.user_metadata?.company_name || '',
+              };
+              
+              const createResult = await createProfile(profileData);
+              console.log("Profile creation result during login:", createResult);
+              
+              return minimalUser;
+            } else {
+              throw profileError;
+            }
           }
 
           if (profileData && profileData.role !== role) {
@@ -244,10 +311,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const user = convertDbProfileToUser(profileData);
             setCurrentUser(user);
             return user;
+          } else {
+            // If no profile found, try to create one
+            const newProfile = {
+              id: data.user.id,
+              email: data.user.email || '',
+              name: data.user.user_metadata?.name || data.user.email || 'Unknown User',
+              role: role,
+              company_name: data.user.user_metadata?.company_name || '',
+            };
+            
+            await createProfile(newProfile);
+            
+            // Create minimal user
+            const minimalUser: User = {
+              id: data.user.id,
+              email: data.user.email || '',
+              name: data.user.user_metadata?.name || data.user.email || 'Unknown User',
+              role: role,
+              companyName: data.user.user_metadata?.company_name || '',
+              createdAt: new Date(),
+              emailVerified: data.user.email_confirmed_at ? true : false
+            };
+            
+            setCurrentUser(minimalUser);
+            return minimalUser;
           }
         } catch (profileErr) {
           console.error("Profile fetch error:", profileErr);
-          return null;
+          
+          // Create a fallback user
+          const fallbackUser: User = {
+            id: data.user.id,
+            email: data.user.email || '',
+            name: data.user.user_metadata?.name || data.user.email || 'Unknown User',
+            role: role,
+            companyName: data.user.user_metadata?.company_name || '',
+            createdAt: new Date(),
+            emailVerified: data.user.email_confirmed_at ? true : false
+          };
+          
+          setCurrentUser(fallbackUser);
+          return fallbackUser;
         }
       }
       return null;
@@ -315,12 +420,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       console.log("Auth signup successful, user created:", data.user.id);
 
-      // IMPORTANT: Explicitly create the profile instead of relying on trigger
+      // Explicitly create the profile
       try {
-        console.log("Manually creating profile for user:", data.user.id);
-        
-        // Wait a brief moment to ensure auth user is fully created
-        await new Promise(resolve => setTimeout(resolve, 500));
+        console.log("Creating profile for user:", data.user.id);
         
         const profileData = {
           id: data.user.id,
@@ -328,48 +430,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           name: name,
           role: role,
           company_name: companyName,
-          email_verified: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
         };
         
-        const { data: profileResult, error: profileError } = await supabase
-          .from('profiles')
-          .insert(profileData)
-          .select('*')
-          .single();
-          
-        if (profileError) {
-          console.error("Error creating profile:", profileError);
-          
-          // If we get an error because the profile already exists, try to fetch it
-          if (profileError.message.includes('duplicate key')) {
-            console.log("Profile may already exist. Attempting to fetch it.");
-          } else {
-            throw profileError;
-          }
-        }
+        const result = await createProfile(profileData);
+        console.log("Profile creation result:", result);
         
-        console.log("Profile created successfully:", profileResult);
+        if (!result.success) {
+          console.warn("Profile creation during registration was not successful:", result.message);
+        }
       } catch (profileCreationError) {
         console.error("Profile creation error:", profileCreationError);
-        // Continue with registration even if profile creation fails
-        // We'll handle fetching/creating the profile when the user logs in
       }
 
       // Process invitation if it exists
       if (invitationCode && role === 'subcontractor') {
         console.log("Processing invitation code:", invitationCode);
         try {
+          // Update invitation status - using direct approach
           const { error: inviteError } = await supabase
-            .rpc('verify_invitation_code', { code_param: invitationCode });
+            .from('invitations')
+            .update({ status: 'accepted' })
+            .eq('code', invitationCode);
 
           if (inviteError) {
-            console.error("Invitation verification error:", inviteError);
+            console.error("Invitation update error:", inviteError);
           } else {
-            // Update invitation status - using simpler approach to avoid type issues
-            const updateData = { status: 'accepted' };
-            await safeUpdate('invitations', updateData, 'code', invitationCode);
             console.log("Invitation accepted successfully");
           }
         } catch (inviteError) {
@@ -377,39 +462,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      // Attempt to fetch the profile to confirm it exists
-      try {
-        const { data: profileData, error: profileFetchError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', data.user.id)
-          .maybeSingle();
-          
-        if (profileFetchError) {
-          console.error("Error fetching profile after creation:", profileFetchError);
-        }
-        
-        if (profileData) {
-          console.log("Profile fetched successfully:", profileData);
-          // Convert database profile to User type
-          const user = convertDbProfileToUser(profileData);
-          setCurrentUser(user);
-          
-          toast({
-            title: "Registration successful",
-            description: "Your account has been created successfully. Please check your email for verification."
-          });
-          
-          return user;
-        } else {
-          console.warn("Profile not found after creation. Using fallback user data.");
-        }
-      } catch (profileFetchError) {
-        console.error("Error fetching profile after creation:", profileFetchError);
-      }
-      
-      // Fallback: Return basic user info if profile fetch fails
-      const fallbackUser: User = {
+      // Use existing user data to create user object
+      const newUser: User = {
         id: data.user.id,
         email: email,
         name: name,
@@ -419,7 +473,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         emailVerified: false
       };
       
-      setCurrentUser(fallbackUser);
+      setCurrentUser(newUser);
       
       toast({
         title: "Registration complete",
@@ -438,7 +492,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
       
-      return fallbackUser;
+      return newUser;
     } catch (error: any) {
       console.error("Registration error:", error);
       toast({

@@ -5,70 +5,56 @@ import { toast } from "@/hooks/use-toast";
 // Utility function to check if profiles table exists and create it if needed
 export const ensureTablesExist = async (): Promise<{ success: boolean, message: string }> => {
   try {
-    // Try to query the profiles table directly - if it exists, this will succeed
-    const { error } = await supabase
+    // First, check if we can access the profiles table
+    const { error: checkError } = await supabase
       .from('profiles')
       .select('id')
       .limit(1);
     
     // If no error, the table exists
-    if (!error) {
+    if (!checkError) {
       return { success: true, message: "All required tables already exist" };
     }
     
-    // If error contains "relation profiles does not exist", we need to create it
-    if (error.message && error.message.includes('relation "profiles" does not exist')) {
-      console.log("Profiles table doesn't exist. Creating it via SQL...");
+    // If table doesn't exist, create it
+    if (checkError.message.includes('relation "profiles" does not exist')) {
+      console.log("Creating profiles table...");
       
-      // Create the profiles table using direct SQL execution
-      const createTableSQL = `
-        CREATE TABLE IF NOT EXISTS public.profiles (
-          id UUID PRIMARY KEY REFERENCES auth.users ON DELETE CASCADE,
-          email TEXT NOT NULL,
-          name TEXT NOT NULL,
-          role TEXT NOT NULL,
-          company_name TEXT,
-          email_verified BOOLEAN DEFAULT FALSE,
-          last_sign_in TIMESTAMP WITH TIME ZONE,
-          created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-          updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-        );
-        
-        ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-        
-        CREATE POLICY IF NOT EXISTS "Users can view own profile" 
-          ON public.profiles 
-          FOR SELECT 
-          USING (auth.uid() = id);
-        
-        CREATE POLICY IF NOT EXISTS "Users can update own profile" 
-          ON public.profiles 
-          FOR UPDATE 
-          USING (auth.uid() = id);
-      `;
+      // Execute SQL to create the profiles table
+      const { error: createError } = await supabase.rpc('create_profile_table');
       
-      // Since we don't have access to direct SQL execution in the client,
-      // we'll simulate checking by attempting to use the table again
-      const checkAgain = await supabase
+      // If function doesn't exist, we need to ask user to manually create the table
+      if (createError && createError.message.includes('function "create_profile_table" does not exist')) {
+        console.log("Function create_profile_table doesn't exist. Please create the table manually.");
+        return { 
+          success: false, 
+          message: "Unable to automatically create tables. Please create them manually in the Supabase dashboard." 
+        };
+      }
+      
+      if (createError) {
+        console.error("Error creating table:", createError);
+        return { success: false, message: `Failed to create tables: ${createError.message}` };
+      }
+      
+      // Verify that the table was created successfully
+      const { error: verifyError } = await supabase
         .from('profiles')
         .select('id')
         .limit(1);
         
-      if (checkAgain.error && checkAgain.error.message.includes('relation "profiles" does not exist')) {
-        console.error("Error creating profiles table:", checkAgain.error);
-        return { 
-          success: false, 
-          message: "Unable to create profiles table automatically. Please create it manually or contact support." 
-        };
+      if (verifyError) {
+        console.error("Error verifying table creation:", verifyError);
+        return { success: false, message: `Tables may not have been created properly: ${verifyError.message}` };
       }
       
-      return { success: true, message: "Profiles table created successfully" };
+      return { success: true, message: "Required tables created successfully" };
     }
     
-    return { success: false, message: `Unexpected error checking tables: ${error.message}` };
+    return { success: false, message: `Unexpected database error: ${checkError.message}` };
   } catch (error: any) {
     console.error("Error in ensureTablesExist:", error);
-    return { success: false, message: `Error checking/creating tables: ${error.message}` };
+    return { success: false, message: `Error checking/creating database: ${error.message}` };
   }
 };
 

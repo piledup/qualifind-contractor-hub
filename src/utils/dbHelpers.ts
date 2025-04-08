@@ -1,5 +1,5 @@
 
-import { supabase, filterById } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 
 /**
  * Helper function to safely query subcontractors and handle type issues
@@ -177,38 +177,31 @@ export const querySubcontractorByUserId = async (userId: string) => {
 };
 
 /**
- * Create a new SQL function in the database
- * This function will be used to create tables if they don't exist
+ * Function to check database connectivity
  */
-export const createSqlFunction = async () => {
+export const checkDatabaseConnectivity = async () => {
   try {
-    // First, check if we can contact the database
-    const { error: checkError } = await supabase
+    // Check if we can connect to the database
+    const { error } = await supabase
       .from('profiles')
       .select('id')
       .limit(1);
     
-    if (checkError && !checkError.message.includes('relation "profiles" does not exist')) {
-      console.error("Error connecting to database:", checkError);
-      return false;
+    // If we get a "relation does not exist" error, that's actually good!
+    // It means we're connected to the database but the table doesn't exist yet
+    if (error && error.message.includes('relation "profiles" does not exist')) {
+      return true;
     }
     
-    // Try using an existing RPC function to check connectivity
-    // We're not creating a function anymore via RPC since type definitions don't allow it
-    const { error } = await supabase.rpc('has_permission', { 
-      user_id: '00000000-0000-0000-0000-000000000000', 
-      permission_name: 'dummy' 
-    });
-    
-    // If function doesn't exist but we can connect, that's still good
-    if (error && !error.message.includes('function "has_permission" does not exist')) {
-      console.error("Error checking database access:", error);
-      return false;
+    // If no error, we're connected and the table exists
+    if (!error) {
+      return true;
     }
     
-    return true;
+    console.error("Error connecting to database:", error);
+    return false;
   } catch (error) {
-    console.error("Error in createSqlFunction:", error);
+    console.error("Error checking database connection:", error);
     return false;
   }
 };

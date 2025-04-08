@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -12,7 +11,7 @@ import { toast } from "@/components/ui/use-toast";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
-import { ensureTablesExist, checkProfileExists } from "@/utils/dbSetup";
+import { ensureTablesExist, checkProfileExists, createProfile } from "@/utils/dbSetup";
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -102,21 +101,16 @@ const Login: React.FC = () => {
         console.warn("Profile doesn't exist for user. Attempting to create one.");
         
         // Create profile for the user if it doesn't exist
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert({
-            id: data.user.id,
-            email: data.user.email || email,
-            name: data.user.user_metadata?.name || email,
-            role: role,
-            company_name: data.user.user_metadata?.company_name || '',
-            email_verified: data.user.email_confirmed_at ? true : false,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          });
-          
-        if (profileError) {
-          console.error("Error creating profile during login:", profileError);
+        const createResult = await createProfile({
+          id: data.user.id,
+          email: data.user.email || email,
+          name: data.user.user_metadata?.name || email,
+          role: role,
+          company_name: data.user.user_metadata?.company_name || '',
+        });
+        
+        if (!createResult.success) {
+          console.error("Error creating profile during login:", createResult.message);
         }
       }
       
