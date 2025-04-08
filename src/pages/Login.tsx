@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -77,64 +76,45 @@ const Login: React.FC = () => {
       }
       
       if (profileData) {
-        const user = {
-          id: data.user.id,
-          email: profileData.email,
-          name: profileData.name,
-          role: profileData.role as UserRole,
-          companyName: profileData.company_name || '',
-          createdAt: new Date(profileData.created_at),
-          emailVerified: profileData.email_verified || false,
-          lastSignIn: profileData.last_sign_in ? new Date(profileData.last_sign_in) : undefined
-        };
+        const loginResult = await login(email, password, role);
         
-        // Instead of using setCurrentUser, use login from AuthContext
-        await login(email, password, role);
-        
-        toast({
-          title: "Login successful",
-          description: `Welcome back, ${user.name}!`
-        });
-        
-        if (user.role === "general-contractor") {
-          navigate("/dashboard");
-        } else {
-          navigate("/sub-dashboard");
+        if (loginResult) {
+          toast({
+            title: "Login successful",
+            description: `Welcome back, ${loginResult.name}!`
+          });
+          
+          if (loginResult.role === "general-contractor") {
+            navigate("/dashboard");
+          } else {
+            navigate("/sub-dashboard");
+          }
         }
       } else {
-        const fallbackUser = {
-          id: data.user.id,
-          email: data.user.email || '',
-          name: data.user.user_metadata?.name || 'User',
-          role: role,
-          companyName: data.user.user_metadata?.company_name || '',
-          createdAt: new Date(),
-          emailVerified: data.user.email_confirmed_at ? true : false
-        };
+        const loginResult = await login(email, password, role);
         
-        // Instead of using setCurrentUser, use login from AuthContext
-        await login(email, password, role);
-        
-        await supabase.from('profiles').insert({
-          id: data.user.id,
-          email: data.user.email || '',
-          name: data.user.user_metadata?.name || 'User',
-          role: role,
-          company_name: data.user.user_metadata?.company_name || '',
-          email_verified: data.user.email_confirmed_at ? true : false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-        
-        toast({
-          title: "Login successful",
-          description: `Welcome, ${fallbackUser.name}!`
-        });
-        
-        if (role === "general-contractor") {
-          navigate("/dashboard");
-        } else {
-          navigate("/sub-dashboard");
+        if (loginResult) {
+          await supabase.from('profiles').insert({
+            id: data.user.id,
+            email: data.user.email || '',
+            name: data.user.user_metadata?.name || 'User',
+            role: role,
+            company_name: data.user.user_metadata?.company_name || '',
+            email_verified: data.user.email_confirmed_at ? true : false,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+          
+          toast({
+            title: "Login successful",
+            description: `Welcome, ${loginResult.name}!`
+          });
+          
+          if (role === "general-contractor") {
+            navigate("/dashboard");
+          } else {
+            navigate("/sub-dashboard");
+          }
         }
       }
     } catch (err: any) {

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -196,7 +197,8 @@ const Register: React.FC = () => {
         }
       }
       
-      const user = await registerUser(
+      // Use the registerUser method from AuthContext
+      await registerUser(
         formData.email,
         formData.password,
         formData.name,
