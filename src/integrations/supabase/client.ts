@@ -94,14 +94,15 @@ export const handleSupabaseError = (error: any): string => {
   return error?.message || "An unexpected error occurred";
 };
 
-// Simple query helper without complex type inference
+// Completely simplified query helper without complex type inference
 export const supabaseQuery = async (queryFn: () => Promise<any>) => {
   try {
-    const { data, error } = await queryFn();
+    // Use any type to avoid TypeScript trying to deeply infer generic types
+    const result = await queryFn();
     
-    if (error) throw error;
+    if (result.error) throw result.error;
     
-    return { data, error: null };
+    return { data: result.data, error: null };
   } catch (err) {
     return { data: null, error: handleSupabaseError(err) };
   }
