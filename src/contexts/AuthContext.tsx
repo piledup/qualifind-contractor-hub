@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { Session, User as SupabaseUser } from "@supabase/supabase-js";
 import { User, UserRole } from "../types";
-import { supabase, mapDbProfileToUser } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
 interface AuthContextType {
@@ -61,8 +61,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return null;
       }
 
-      // Convert database profile to user object
-      return mapDbProfileToUser(data);
+      // Convert database profile to User type
+      return {
+        id: data.id,
+        email: data.email,
+        name: data.name,
+        role: data.role as UserRole,
+        companyName: data.company_name || '',
+        createdAt: new Date(data.created_at),
+        emailVerified: data.email_verified || false,
+        lastSignIn: data.last_sign_in ? new Date(data.last_sign_in) : undefined
+      };
     } catch (error) {
       console.error("Error in fetchUserProfile:", error);
       return null;

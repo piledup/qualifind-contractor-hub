@@ -2,6 +2,70 @@
 import { supabase } from "@/integrations/supabase/client";
 import { User, Subcontractor, Project, Invitation, UserRole } from "@/types";
 
+// Helper function to convert database profile format to User type
+const mapDbProfileToUser = (dbProfile: any): User => {
+  return {
+    id: dbProfile.id,
+    email: dbProfile.email,
+    name: dbProfile.name,
+    role: dbProfile.role as UserRole,
+    companyName: dbProfile.company_name || '',
+    createdAt: new Date(dbProfile.created_at),
+    emailVerified: dbProfile.email_verified || false,
+    lastSignIn: dbProfile.last_sign_in ? new Date(dbProfile.last_sign_in) : undefined
+  };
+};
+
+// Helper function to convert database subcontractor format to Subcontractor type
+const mapDbSubcontractorToSubcontractor = (dbSubcontractor: any): Subcontractor => {
+  return {
+    id: dbSubcontractor.id,
+    userId: dbSubcontractor.user_id || '',
+    name: dbSubcontractor.name || '',
+    email: dbSubcontractor.email,
+    companyName: dbSubcontractor.company_name || '',
+    companyLogo: dbSubcontractor.company_logo || undefined,
+    trade: dbSubcontractor.trade || '',
+    qualificationStatus: dbSubcontractor.qualification_status as 'qualified' | 'unqualified' | 'pending',
+    submissionStatus: dbSubcontractor.submission_status as 'unsubmitted' | 'submitted' | 'expiring' | 'expired',
+    lastSubmissionDate: dbSubcontractor.last_submission_date ? new Date(dbSubcontractor.last_submission_date) : undefined,
+    singleProjectLimit: dbSubcontractor.single_project_limit || undefined,
+    aggregateLimit: dbSubcontractor.aggregate_limit || undefined,
+    hasPaid: dbSubcontractor.has_paid,
+    invitedBy: dbSubcontractor.invited_by,
+    invitedAt: new Date(dbSubcontractor.invited_at)
+  };
+};
+
+// Helper function to convert database project format to Project type
+const mapDbProjectToProject = (dbProject: any): Project => {
+  return {
+    id: dbProject.id,
+    name: dbProject.name,
+    description: dbProject.description || '',
+    location: dbProject.location || '',
+    startDate: dbProject.start_date ? new Date(dbProject.start_date) : new Date(),
+    endDate: dbProject.end_date ? new Date(dbProject.end_date) : undefined,
+    budget: dbProject.budget || undefined,
+    createdBy: dbProject.created_by,
+    createdAt: new Date(dbProject.created_at)
+  };
+};
+
+// Helper function to convert database invitation format to Invitation type
+const mapDbInvitationToInvitation = (dbInvitation: any): Invitation => {
+  return {
+    id: dbInvitation.id,
+    email: dbInvitation.email,
+    generalContractorId: dbInvitation.general_contractor_id,
+    generalContractorName: '', // This might need to be populated from a separate query
+    token: dbInvitation.code,
+    status: dbInvitation.status as 'pending' | 'accepted' | 'expired',
+    createdAt: new Date(dbInvitation.created_at),
+    expiresAt: new Date(dbInvitation.expires_at)
+  };
+};
+
 // Helper function to get user's profile
 export const getUserProfile = async (userId: string) => {
   try {
@@ -11,7 +75,8 @@ export const getUserProfile = async (userId: string) => {
       .eq('id', userId)
       .maybeSingle();
     
-    return { data: data as User | null, error };
+    if (error) throw error;
+    return { data: data ? mapDbProfileToUser(data) : null, error: null };
   } catch (err) {
     console.error("Error in getUserProfile:", err);
     return { data: null, error: err };
@@ -26,7 +91,11 @@ export const getSubcontractorsByInvitedBy = async (userId: string) => {
       .select('*')
       .eq('invited_by', userId);
     
-    return { data: data as Subcontractor[] | null, error };
+    if (error) throw error;
+    return { 
+      data: data ? data.map(mapDbSubcontractorToSubcontractor) : null, 
+      error: null 
+    };
   } catch (err) {
     console.error("Error in getSubcontractorsByInvitedBy:", err);
     return { data: null, error: err };
@@ -41,7 +110,11 @@ export const getProjectsByCreatedBy = async (userId: string) => {
       .select('*')
       .eq('created_by', userId);
     
-    return { data: data as Project[] | null, error };
+    if (error) throw error;
+    return { 
+      data: data ? data.map(mapDbProjectToProject) : null, 
+      error: null 
+    };
   } catch (err) {
     console.error("Error in getProjectsByCreatedBy:", err);
     return { data: null, error: err };
@@ -61,7 +134,30 @@ export const getInvitationsByGC = async (userId: string, status?: string) => {
     }
     
     const { data, error } = await query;
-    return { data: data as Invitation[] | null, error };
+    
+    if (error) throw error;
+    
+    // For each invitation, we need to get the GC name
+    const invitations = data ? await Promise.all(data.map(async (inv) => {
+      const mappedInv = mapDbInvitationToInvitation(inv);
+      
+      // Get the GC name if not already set
+      if (!mappedInv.generalContractorName && mappedInv.generalContractorId) {
+        const { data: gcProfile } = await supabase
+          .from('profiles')
+          .select('name')
+          .eq('id', mappedInv.generalContractorId)
+          .maybeSingle();
+        
+        if (gcProfile) {
+          mappedInv.generalContractorName = gcProfile.name;
+        }
+      }
+      
+      return mappedInv;
+    })) : [];
+    
+    return { data: invitations, error: null };
   } catch (err) {
     console.error("Error in getInvitationsByGC:", err);
     return { data: null, error: err };
@@ -162,7 +258,11 @@ export const getSubcontractorByUserId = async (userId: string) => {
       .eq('user_id', userId)
       .maybeSingle();
     
-    return { data: data as Subcontractor | null, error };
+    if (error) throw error;
+    return { 
+      data: data ? mapDbSubcontractorToSubcontractor(data) : null, 
+      error: null 
+    };
   } catch (err) {
     console.error("Error in getSubcontractorByUserId:", err);
     return { data: null, error: err };

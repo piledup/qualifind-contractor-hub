@@ -52,7 +52,10 @@ export const safeInsert = async (tableName: "profiles" | "invitations" | "permis
 };
 
 // Type-safe version of insert
-export const typedInsert = async <T>(tableName: "profiles" | "invitations" | "permissions" | "projects" | "subcontractors" | "qualification_documents" | "project_subcontractors", data: any): Promise<{ data: T | null; error: any }> => {
+export const typedInsert = async <T>(
+  tableName: "profiles" | "invitations" | "permissions" | "projects" | "subcontractors" | "qualification_documents" | "project_subcontractors", 
+  data: any
+): Promise<{ data: T | null; error: any }> => {
   try {
     const { data: result, error } = await supabase
       .from(tableName)
