@@ -5,7 +5,8 @@ import type { Database } from './types';
 const SUPABASE_URL = "https://vioaqyclkyrhoutysjmh.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZpb2FxeWNsa3lyaG91dHlzam1oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM1MzUwMzQsImV4cCI6MjA1OTExMTAzNH0.umU9wju2XRnmN8ZcZyufWWXRqkisA_CN2zGY3-LA-MM";
 
-export const supabase = createClient<Database>(
+// Create a non-typed client to avoid excessive type instantiation
+const supabaseClient = createClient(
   SUPABASE_URL, 
   SUPABASE_PUBLISHABLE_KEY,
   {
@@ -18,6 +19,9 @@ export const supabase = createClient<Database>(
     }
   }
 );
+
+// Export the client without strong typing to avoid TypeScript issues
+export const supabase = supabaseClient;
 
 // Type-safe helper function for transforming database profile data to User type
 export const mapDbProfileToUser = (profileData: any) => {
@@ -94,13 +98,14 @@ export const handleSupabaseError = (error: any): string => {
   return error?.message || "An unexpected error occurred";
 };
 
-// Completely simplified query helper without complex type inference
-export const supabaseQuery = async (queryFn: () => Promise<any>) => {
+// Extremely simplified query helper to avoid type instantiation issues
+export const supabaseQuery = async (queryFn: Function) => {
   try {
-    // Use any type to avoid TypeScript trying to deeply infer generic types
     const result = await queryFn();
     
-    if (result.error) throw result.error;
+    if (result.error) {
+      return { data: null, error: handleSupabaseError(result.error) };
+    }
     
     return { data: result.data, error: null };
   } catch (err) {
