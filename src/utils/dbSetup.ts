@@ -1,90 +1,25 @@
 
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseQuery } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
-// Utility function to check if profiles table exists and create it if needed
-export const ensureTablesExist = async (): Promise<{ success: boolean, message: string }> => {
+// Check if database tables exist
+export const checkDatabaseTables = async (): Promise<boolean> => {
   try {
-    // First, check if we can access the profiles table
-    const { error: checkError } = await supabase
-      .from('profiles')
-      .select('id')
-      .limit(1);
-    
-    // If no error, the table exists
-    if (!checkError) {
-      return { success: true, message: "All required tables already exist" };
-    }
-    
-    // If table doesn't exist, create it using SQL query instead of RPC
-    if (checkError.message.includes('relation "profiles" does not exist')) {
-      console.log("Creating profiles table...");
-      
-      // Execute SQL to create the profiles table using the SQL endpoint
-      const { error: createError } = await supabase.rpc('execute_sql', {
-        sql_query: `
-          CREATE TABLE IF NOT EXISTS public.profiles (
-            id UUID PRIMARY KEY REFERENCES auth.users(id),
-            email TEXT NOT NULL,
-            name TEXT NOT NULL,
-            role TEXT NOT NULL,
-            company_name TEXT,
-            email_verified BOOLEAN DEFAULT FALSE,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
-            updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
-            last_sign_in TIMESTAMP WITH TIME ZONE
-          )
-        `
-      });
-      
-      if (createError) {
-        console.error("Error creating table:", createError);
-        return { success: false, message: `Failed to create tables: ${createError.message}` };
-      }
-      
-      // Verify that the table was created successfully
-      const { error: verifyError } = await supabase
-        .from('profiles')
-        .select('id')
-        .limit(1);
-        
-      if (verifyError) {
-        console.error("Error verifying table creation:", verifyError);
-        return { success: false, message: `Tables may not have been created properly: ${verifyError.message}` };
-      }
-      
-      return { success: true, message: "Required tables created successfully" };
-    }
-    
-    return { success: false, message: `Unexpected database error: ${checkError.message}` };
-  } catch (error: any) {
-    console.error("Error in ensureTablesExist:", error);
-    return { success: false, message: `Error checking/creating database: ${error.message}` };
-  }
-};
-
-// Function to check if a specific profile exists
-export const checkProfileExists = async (userId: string): Promise<boolean> => {
-  try {
+    // Check if profiles table exists
     const { data, error } = await supabase
       .from('profiles')
       .select('id')
-      .eq('id', userId)
-      .maybeSingle();
+      .limit(1);
       
-    if (error) {
-      console.error("Error checking if profile exists:", error);
-      return false;
-    }
-    
-    return !!data;
+    // If we can query the table without error, it exists
+    return !error;
   } catch (error) {
-    console.error("Error in checkProfileExists:", error);
+    console.error("Error checking database tables:", error);
     return false;
   }
 };
 
-// Function to manually create a profile
+// Create a user profile in the database
 export const createProfile = async (userData: {
   id: string;
   email: string;
@@ -116,21 +51,42 @@ export const createProfile = async (userData: {
   }
 };
 
-// Manual database verification that can be triggered by users
+// Check if a specific profile exists
+export const checkProfileExists = async (userId: string): Promise<boolean> => {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', userId)
+      .maybeSingle();
+      
+    if (error) {
+      console.error("Error checking if profile exists:", error);
+      return false;
+    }
+    
+    return !!data;
+  } catch (error) {
+    console.error("Error in checkProfileExists:", error);
+    return false;
+  }
+};
+
+// Function to verify database connectivity
 export const verifyDatabaseSetup = async (): Promise<void> => {
   try {
-    const result = await ensureTablesExist();
+    const tablesExist = await checkDatabaseTables();
     
-    if (result.success) {
+    if (tablesExist) {
       toast({
         title: "Database verification successful",
-        description: result.message,
+        description: "All required database tables exist",
       });
     } else {
       toast({
         variant: "destructive",
         title: "Database verification failed",
-        description: result.message,
+        description: "Required database tables do not exist",
       });
     }
   } catch (error: any) {

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { UserRole } from "@/types";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "@/hooks/use-toast";
 import { AlertCircle, BadgeCheck, Mail, Eye, EyeOff, Loader2 } from "lucide-react";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { 
@@ -23,7 +23,8 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { supabase } from "@/integrations/supabase/client";
-import { ensureTablesExist } from "@/utils/dbSetup";
+import { checkDatabaseConnectivity } from "@/utils/dbHelpers";
+import { verifyInvitationCode } from "@/utils/dbHelpers";
 
 // Form schema with validation
 const registerSchema = z.object({
@@ -67,19 +68,74 @@ const Register: React.FC = () => {
   useEffect(() => {
     const queryParams = new URLSearchParams(location.search);
     const emailParam = queryParams.get('email');
-    const isInvited = queryParams.get('invited') === 'true';
+    const codeParam = queryParams.get('code');
 
     if (emailParam) {
       form.setValue('email', emailParam);
     }
 
-    if (isInvited) {
+    if (codeParam) {
+      // Validate invitation code
+      const checkInvitation = async () => {
+        try {
+          const { data, error } = await verifyInvitationCode(codeParam);
+          
+          if (error) {
+            toast({
+              title: "Invitation Error",
+              description: error,
+              variant: "destructive"
+            });
+            return;
+          }
+          
+          if (data && data.length > 0 && data[0].valid) {
+            const invitationInfo = data[0];
+            setInvitationData({
+              email: invitationInfo.email,
+              generalContractorId: invitationInfo.general_contractor_id,
+              generalContractorName: invitationInfo.general_contractor_name,
+              code: codeParam
+            });
+            
+            form.setValue('email', invitationInfo.email);
+            form.setValue('role', 'subcontractor');
+            
+            localStorage.setItem('invitationData', JSON.stringify({
+              email: invitationInfo.email,
+              generalContractorId: invitationInfo.general_contractor_id,
+              generalContractorName: invitationInfo.general_contractor_name,
+              code: codeParam
+            }));
+          } else {
+            toast({
+              title: "Invalid Invitation",
+              description: "The invitation code is invalid or has expired.",
+              variant: "destructive"
+            });
+          }
+        } catch (err) {
+          console.error("Error verifying invitation:", err);
+          toast({
+            title: "Invitation Error",
+            description: "Failed to verify invitation code.",
+            variant: "destructive"
+          });
+        }
+      };
+      
+      checkInvitation();
+    } else {
+      // Check for stored invitation data
       const storedInvitationData = localStorage.getItem('invitationData');
       if (storedInvitationData) {
         try {
           const parsedData = JSON.parse(storedInvitationData);
           setInvitationData(parsedData);
           form.setValue('role', 'subcontractor');
+          if (parsedData.email) {
+            form.setValue('email', parsedData.email);
+          }
         } catch (e) {
           console.error("Error parsing invitation data", e);
         }
@@ -111,15 +167,13 @@ const Register: React.FC = () => {
         role: invitationData ? 'subcontractor' as UserRole : formData.role 
       });
       
-      // First check if database tables exist
-      const dbCheck = await ensureTablesExist();
-      if (!dbCheck.success) {
-        console.warn("Database setup issue during registration:", dbCheck.message);
-        
-        // If database tables don't exist, we'll still try to register but warn the user
+      // Check database connectivity
+      const isConnected = await checkDatabaseConnectivity();
+      if (!isConnected) {
+        console.warn("Database connectivity issue during registration");
         toast({
-          title: "Database setup warning",
-          description: "There was an issue with database setup, but registration will continue.",
+          title: "Connection Warning",
+          description: "There might be a problem connecting to the database, but we'll try to register you anyway.",
           variant: "default"
         });
       }
@@ -141,26 +195,17 @@ const Register: React.FC = () => {
       );
       
       if (user) {
-        if (invitationData) {
-          console.log("Processing invitation data:", invitationData);
-          const { error: inviteUpdateError } = await supabase
-            .from('invitations')
-            .update({ status: 'accepted' })
-            .eq('code', invitationData.code);
-          
-          if (inviteUpdateError) {
-            console.error("Error updating invitation status:", inviteUpdateError);
-          } else {
-            localStorage.removeItem('invitationData');
-          }
-        }
-        
         setShowVerificationBanner(true);
         
         toast({
           title: "Registration successful",
           description: "Your account has been created. Please verify your email."
         });
+        
+        // Clear invitation data from localStorage
+        if (invitationData) {
+          localStorage.removeItem('invitationData');
+        }
       } else {
         throw new Error("Failed to register user");
       }
