@@ -4,47 +4,53 @@ import { User, Subcontractor, Project, Invitation, UserRole } from "@/types";
 
 // Helper function to get user's profile
 export const getUserProfile = async (userId: string) => {
-  return supabaseQuery<User>(() => 
-    supabase
+  return supabaseQuery<User>(async () => {
+    const result = await supabase
       .from('profiles')
       .select('*')
       .eq('id', userId)
-      .maybeSingle()
-  );
+      .maybeSingle();
+    return result;
+  });
 };
 
 // Helper function to safely query subcontractors
 export const getSubcontractorsByInvitedBy = async (userId: string) => {
-  return supabaseQuery<Subcontractor[]>(() => 
-    supabase
+  return supabaseQuery<Subcontractor[]>(async () => {
+    const result = await supabase
       .from('subcontractors')
       .select('*')
-      .eq('invited_by', userId)
-  );
+      .eq('invited_by', userId);
+    return result;
+  });
 };
 
 // Helper function to safely query projects
 export const getProjectsByCreatedBy = async (userId: string) => {
-  return supabaseQuery<Project[]>(() => 
-    supabase
+  return supabaseQuery<Project[]>(async () => {
+    const result = await supabase
       .from('projects')
       .select('*')
-      .eq('created_by', userId)
-  );
+      .eq('created_by', userId);
+    return result;
+  });
 };
 
 // Helper function to safely query invitations
 export const getInvitationsByGC = async (userId: string, status?: string) => {
-  let query = supabase
-    .from('invitations')
-    .select('*')
-    .eq('general_contractor_id', userId);
+  return supabaseQuery<Invitation[]>(async () => {
+    let query = supabase
+      .from('invitations')
+      .select('*')
+      .eq('general_contractor_id', userId);
+      
+    if (status) {
+      query = query.eq('status', status);
+    }
     
-  if (status) {
-    query = query.eq('status', status);
-  }
-  
-  return supabaseQuery<Invitation[]>(() => query);
+    const result = await query;
+    return result;
+  });
 };
 
 // Helper function to safely insert invitation data
@@ -53,8 +59,8 @@ export const createInvitation = async (invitationData: {
   email: string;
   code: string;
 }) => {
-  return supabaseQuery<any>(() => 
-    supabase
+  return supabaseQuery<any>(async () => {
+    const result = await supabase
       .from('invitations')
       .insert({
         general_contractor_id: invitationData.general_contractor_id,
@@ -62,8 +68,9 @@ export const createInvitation = async (invitationData: {
         code: invitationData.code,
         status: 'pending'
       })
-      .select()
-  );
+      .select();
+    return result;
+  });
 };
 
 // Helper function to safely insert subcontractor data
@@ -74,8 +81,8 @@ export const createSubcontractor = async (subcontractorData: {
   company_name?: string;
   trade?: string;
 }) => {
-  return supabaseQuery<any>(() => 
-    supabase
+  return supabaseQuery<any>(async () => {
+    const result = await supabase
       .from('subcontractors')
       .insert({
         invited_by: subcontractorData.invited_by,
@@ -87,8 +94,9 @@ export const createSubcontractor = async (subcontractorData: {
         submission_status: 'unsubmitted',
         has_paid: false
       })
-      .select()
-  );
+      .select();
+    return result;
+  });
 };
 
 // Helper function to safely insert project data
@@ -101,8 +109,8 @@ export const createProject = async (projectData: {
   end_date?: string;
   budget?: number;
 }) => {
-  return supabaseQuery<any>(() => 
-    supabase
+  return supabaseQuery<any>(async () => {
+    const result = await supabase
       .from('projects')
       .insert({
         created_by: projectData.created_by,
@@ -113,19 +121,21 @@ export const createProject = async (projectData: {
         end_date: projectData.end_date,
         budget: projectData.budget
       })
-      .select()
-  );
+      .select();
+    return result;
+  });
 };
 
 // Helper function to safely get subcontractor by user ID
 export const getSubcontractorByUserId = async (userId: string) => {
-  return supabaseQuery<Subcontractor>(() => 
-    supabase
+  return supabaseQuery<Subcontractor>(async () => {
+    const result = await supabase
       .from('subcontractors')
       .select('*')
       .eq('user_id', userId)
-      .maybeSingle()
-  );
+      .maybeSingle();
+    return result;
+  });
 };
 
 // Helper to verify an invitation code
@@ -135,10 +145,11 @@ export const verifyInvitationCode = async (code: string) => {
     email: string;
     general_contractor_id: string;
     general_contractor_name: string;
-  }[]>(() => 
-    supabase
-      .rpc('verify_invitation_code', { code_param: code })
-  );
+  }[]>(async () => {
+    const result = await supabase
+      .rpc('verify_invitation_code', { code_param: code });
+    return result;
+  });
 };
 
 // Function to check database connectivity

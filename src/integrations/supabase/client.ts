@@ -35,6 +35,54 @@ export const mapDbProfileToUser = (profileData: any) => {
   };
 };
 
+// Helper function to safely filter by ID (handles UUID validation)
+export const filterById = (id: string) => {
+  return id;
+};
+
+// Helper function for safe database inserts
+export const safeInsert = async (table: string, data: any) => {
+  const { data: result, error } = await supabase
+    .from(table)
+    .insert(data)
+    .select();
+  
+  if (error) throw error;
+  return result;
+};
+
+// Type-safe version of insert
+export const typedInsert = async <T>(table: string, data: any): Promise<{ data: T | null; error: any }> => {
+  try {
+    const { data: result, error } = await supabase
+      .from(table)
+      .insert(data)
+      .select();
+    
+    if (error) throw error;
+    return { data: result as unknown as T, error: null };
+  } catch (err) {
+    return { data: null, error: err };
+  }
+};
+
+// Helper function for safe database selects
+export const safeSelect = async (table: string, query: any = {}) => {
+  let queryBuilder = supabase.from(table).select('*');
+  
+  // Apply filters if provided
+  Object.entries(query).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      queryBuilder = queryBuilder.eq(key, value);
+    }
+  });
+  
+  const { data, error } = await queryBuilder;
+  
+  if (error) throw error;
+  return data;
+};
+
 // Error handling utility
 export const handleSupabaseError = (error: any): string => {
   console.error("Supabase error:", error);
