@@ -16,21 +16,24 @@ export const ensureTablesExist = async (): Promise<{ success: boolean, message: 
       return { success: true, message: "All required tables already exist" };
     }
     
-    // If table doesn't exist, create it
+    // If table doesn't exist, create it using SQL query instead of RPC
     if (checkError.message.includes('relation "profiles" does not exist')) {
       console.log("Creating profiles table...");
       
-      // Execute SQL to create the profiles table
-      const { error: createError } = await supabase.rpc('create_profile_table');
-      
-      // If function doesn't exist, we need to ask user to manually create the table
-      if (createError && createError.message.includes('function "create_profile_table" does not exist')) {
-        console.log("Function create_profile_table doesn't exist. Please create the table manually.");
-        return { 
-          success: false, 
-          message: "Unable to automatically create tables. Please create them manually in the Supabase dashboard." 
-        };
-      }
+      // Execute SQL to create the profiles table directly
+      const { error: createError } = await supabase.query(`
+        CREATE TABLE IF NOT EXISTS public.profiles (
+          id UUID PRIMARY KEY REFERENCES auth.users(id),
+          email TEXT NOT NULL,
+          name TEXT NOT NULL,
+          role TEXT NOT NULL,
+          company_name TEXT,
+          email_verified BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+          last_sign_in TIMESTAMP WITH TIME ZONE
+        )
+      `);
       
       if (createError) {
         console.error("Error creating table:", createError);
