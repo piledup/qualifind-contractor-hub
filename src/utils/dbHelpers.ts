@@ -1,44 +1,56 @@
 
-import { supabase, supabaseQuery } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 import { User, Subcontractor, Project, Invitation, UserRole } from "@/types";
 
 // Helper function to get user's profile
 export const getUserProfile = async (userId: string) => {
-  return supabaseQuery<User>(async () => {
-    const result = await supabase
+  try {
+    const { data, error } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', userId)
       .maybeSingle();
-    return result;
-  });
+    
+    return { data: data as User | null, error };
+  } catch (err) {
+    console.error("Error in getUserProfile:", err);
+    return { data: null, error: err };
+  }
 };
 
 // Helper function to safely query subcontractors
 export const getSubcontractorsByInvitedBy = async (userId: string) => {
-  return supabaseQuery<Subcontractor[]>(async () => {
-    const result = await supabase
+  try {
+    const { data, error } = await supabase
       .from('subcontractors')
       .select('*')
       .eq('invited_by', userId);
-    return result;
-  });
+    
+    return { data: data as Subcontractor[] | null, error };
+  } catch (err) {
+    console.error("Error in getSubcontractorsByInvitedBy:", err);
+    return { data: null, error: err };
+  }
 };
 
 // Helper function to safely query projects
 export const getProjectsByCreatedBy = async (userId: string) => {
-  return supabaseQuery<Project[]>(async () => {
-    const result = await supabase
+  try {
+    const { data, error } = await supabase
       .from('projects')
       .select('*')
       .eq('created_by', userId);
-    return result;
-  });
+    
+    return { data: data as Project[] | null, error };
+  } catch (err) {
+    console.error("Error in getProjectsByCreatedBy:", err);
+    return { data: null, error: err };
+  }
 };
 
 // Helper function to safely query invitations
 export const getInvitationsByGC = async (userId: string, status?: string) => {
-  return supabaseQuery<Invitation[]>(async () => {
+  try {
     let query = supabase
       .from('invitations')
       .select('*')
@@ -48,9 +60,12 @@ export const getInvitationsByGC = async (userId: string, status?: string) => {
       query = query.eq('status', status);
     }
     
-    const result = await query;
-    return result;
-  });
+    const { data, error } = await query;
+    return { data: data as Invitation[] | null, error };
+  } catch (err) {
+    console.error("Error in getInvitationsByGC:", err);
+    return { data: null, error: err };
+  }
 };
 
 // Helper function to safely insert invitation data
@@ -59,8 +74,8 @@ export const createInvitation = async (invitationData: {
   email: string;
   code: string;
 }) => {
-  return supabaseQuery<any>(async () => {
-    const result = await supabase
+  try {
+    const { data, error } = await supabase
       .from('invitations')
       .insert({
         general_contractor_id: invitationData.general_contractor_id,
@@ -69,8 +84,12 @@ export const createInvitation = async (invitationData: {
         status: 'pending'
       })
       .select();
-    return result;
-  });
+    
+    return { data, error };
+  } catch (err) {
+    console.error("Error in createInvitation:", err);
+    return { data: null, error: err };
+  }
 };
 
 // Helper function to safely insert subcontractor data
@@ -81,8 +100,8 @@ export const createSubcontractor = async (subcontractorData: {
   company_name?: string;
   trade?: string;
 }) => {
-  return supabaseQuery<any>(async () => {
-    const result = await supabase
+  try {
+    const { data, error } = await supabase
       .from('subcontractors')
       .insert({
         invited_by: subcontractorData.invited_by,
@@ -95,8 +114,12 @@ export const createSubcontractor = async (subcontractorData: {
         has_paid: false
       })
       .select();
-    return result;
-  });
+    
+    return { data, error };
+  } catch (err) {
+    console.error("Error in createSubcontractor:", err);
+    return { data: null, error: err };
+  }
 };
 
 // Helper function to safely insert project data
@@ -109,8 +132,8 @@ export const createProject = async (projectData: {
   end_date?: string;
   budget?: number;
 }) => {
-  return supabaseQuery<any>(async () => {
-    const result = await supabase
+  try {
+    const { data, error } = await supabase
       .from('projects')
       .insert({
         created_by: projectData.created_by,
@@ -122,34 +145,41 @@ export const createProject = async (projectData: {
         budget: projectData.budget
       })
       .select();
-    return result;
-  });
+    
+    return { data, error };
+  } catch (err) {
+    console.error("Error in createProject:", err);
+    return { data: null, error: err };
+  }
 };
 
 // Helper function to safely get subcontractor by user ID
 export const getSubcontractorByUserId = async (userId: string) => {
-  return supabaseQuery<Subcontractor>(async () => {
-    const result = await supabase
+  try {
+    const { data, error } = await supabase
       .from('subcontractors')
       .select('*')
       .eq('user_id', userId)
       .maybeSingle();
-    return result;
-  });
+    
+    return { data: data as Subcontractor | null, error };
+  } catch (err) {
+    console.error("Error in getSubcontractorByUserId:", err);
+    return { data: null, error: err };
+  }
 };
 
 // Helper to verify an invitation code
 export const verifyInvitationCode = async (code: string) => {
-  return supabaseQuery<{
-    valid: boolean;
-    email: string;
-    general_contractor_id: string;
-    general_contractor_name: string;
-  }[]>(async () => {
-    const result = await supabase
+  try {
+    const { data, error } = await supabase
       .rpc('verify_invitation_code', { code_param: code });
-    return result;
-  });
+    
+    return { data, error };
+  } catch (err) {
+    console.error("Error in verifyInvitationCode:", err);
+    return { data: null, error: err };
+  }
 };
 
 // Function to check database connectivity

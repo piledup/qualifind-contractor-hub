@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { Session, User as SupabaseUser } from "@supabase/supabase-js";
 import { User, UserRole } from "../types";
-import { supabase, mapDbProfileToUser, supabaseQuery } from "@/integrations/supabase/client";
+import { supabase, mapDbProfileToUser } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
 interface AuthContextType {
@@ -45,13 +45,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Function to fetch user profile
   const fetchUserProfile = async (userId: string): Promise<User | null> => {
     try {
-      const { data, error } = await supabaseQuery<any>(() => 
-        supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .maybeSingle()
-      );
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
 
       if (error) {
         console.error("Error fetching profile:", error);

@@ -40,10 +40,10 @@ export const filterById = (id: string) => {
   return id;
 };
 
-// Helper function for safe database inserts
-export const safeInsert = async (table: string, data: any) => {
+// Helper function for safe database operations
+export const safeInsert = async (tableName: "profiles" | "invitations" | "permissions" | "projects" | "subcontractors" | "qualification_documents" | "project_subcontractors", data: any) => {
   const { data: result, error } = await supabase
-    .from(table)
+    .from(tableName)
     .insert(data)
     .select();
   
@@ -52,10 +52,10 @@ export const safeInsert = async (table: string, data: any) => {
 };
 
 // Type-safe version of insert
-export const typedInsert = async <T>(table: string, data: any): Promise<{ data: T | null; error: any }> => {
+export const typedInsert = async <T>(tableName: "profiles" | "invitations" | "permissions" | "projects" | "subcontractors" | "qualification_documents" | "project_subcontractors", data: any): Promise<{ data: T | null; error: any }> => {
   try {
     const { data: result, error } = await supabase
-      .from(table)
+      .from(tableName)
       .insert(data)
       .select();
     
@@ -67,8 +67,8 @@ export const typedInsert = async <T>(table: string, data: any): Promise<{ data: 
 };
 
 // Helper function for safe database selects
-export const safeSelect = async (table: string, query: any = {}) => {
-  let queryBuilder = supabase.from(table).select('*');
+export const safeSelect = async (tableName: "profiles" | "invitations" | "permissions" | "projects" | "subcontractors" | "qualification_documents" | "project_subcontractors", query: any = {}) => {
+  let queryBuilder = supabase.from(tableName).select('*');
   
   // Apply filters if provided
   Object.entries(query).forEach(([key, value]) => {
@@ -89,7 +89,7 @@ export const handleSupabaseError = (error: any): string => {
   return error?.message || "An unexpected error occurred";
 };
 
-// Type-safe query helper
+// Type-safe query helper that returns a properly typed Promise
 export const supabaseQuery = async <T>(
   queryFn: () => Promise<{ data: any; error: any }>
 ): Promise<{ data: T | null; error: string | null }> => {
