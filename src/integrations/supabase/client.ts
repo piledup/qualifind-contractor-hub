@@ -40,8 +40,12 @@ export const filterById = (id: string) => {
   return id;
 };
 
-// Simple helper functions for database operations without complex types
-export const safeInsert = async (tableName: string, data: any) => {
+// Define the type for table names to avoid string type errors
+type TableName = 'profiles' | 'invitations' | 'permissions' | 'projects' | 
+                'subcontractors' | 'qualification_documents' | 'project_subcontractors';
+
+// Simple helper function for database operations without complex types
+export const safeInsert = async (tableName: TableName, data: any) => {
   const { data: result, error } = await supabase
     .from(tableName)
     .insert(data)
@@ -51,7 +55,8 @@ export const safeInsert = async (tableName: string, data: any) => {
   return result;
 };
 
-export const typedInsert = async (tableName: string, data: any) => {
+// Simplified typed insert function to avoid deep type instantiation
+export const typedInsert = async (tableName: TableName, data: any) => {
   try {
     const { data: result, error } = await supabase
       .from(tableName)
@@ -67,7 +72,7 @@ export const typedInsert = async (tableName: string, data: any) => {
 };
 
 // Helper function for safe database selects
-export const safeSelect = async (tableName: string, query: Record<string, any> = {}) => {
+export const safeSelect = async (tableName: TableName, query: Record<string, any> = {}) => {
   let queryBuilder = supabase.from(tableName).select('*');
   
   // Apply filters if provided
@@ -90,7 +95,7 @@ export const handleSupabaseError = (error: any): string => {
 };
 
 // Simple query helper without complex type inference
-export const supabaseQuery = async (queryFn: () => Promise<{ data: any; error: any }>) => {
+export const supabaseQuery = async (queryFn: () => Promise<any>) => {
   try {
     const { data, error } = await queryFn();
     
