@@ -51,11 +51,11 @@ export const safeInsert = async (tableName: "profiles" | "invitations" | "permis
   return result;
 };
 
-// Simplified function for inserting data without complex type inference
+// Simplified function with no type parameters to avoid deep instantiation
 export const typedInsert = async (
   tableName: "profiles" | "invitations" | "permissions" | "projects" | "subcontractors" | "qualification_documents" | "project_subcontractors", 
   data: any
-): Promise<{ data: any; error: any }> => {
+) => {
   try {
     const { data: result, error } = await supabase
       .from(tableName)
@@ -93,10 +93,10 @@ export const handleSupabaseError = (error: any): string => {
   return error?.message || "An unexpected error occurred";
 };
 
-// Simplified query helper with basic typing
+// Basic query helper with no generic type parameters
 export const supabaseQuery = async (
   queryFn: () => Promise<{ data: any; error: any }>
-): Promise<{ data: any; error: string | null }> => {
+) => {
   try {
     const { data, error } = await queryFn();
     
