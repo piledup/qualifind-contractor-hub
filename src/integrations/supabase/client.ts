@@ -51,10 +51,10 @@ export const safeInsert = async (tableName: "profiles" | "invitations" | "permis
   return result;
 };
 
-// Type-safe version of insert
+// Simpler typed version of insert that avoids excessive type instantiation
 export const typedInsert = async <T>(
   tableName: "profiles" | "invitations" | "permissions" | "projects" | "subcontractors" | "qualification_documents" | "project_subcontractors", 
-  data: any
+  data: Record<string, any>
 ): Promise<{ data: T | null; error: any }> => {
   try {
     const { data: result, error } = await supabase
@@ -63,6 +63,7 @@ export const typedInsert = async <T>(
       .select();
     
     if (error) throw error;
+    // Use type assertion instead of complex generic inference
     return { data: result as unknown as T, error: null };
   } catch (err) {
     return { data: null, error: err };
@@ -92,7 +93,7 @@ export const handleSupabaseError = (error: any): string => {
   return error?.message || "An unexpected error occurred";
 };
 
-// Type-safe query helper that returns a properly typed Promise
+// Type-safe query helper with simpler return type
 export const supabaseQuery = async <T>(
   queryFn: () => Promise<{ data: any; error: any }>
 ): Promise<{ data: T | null; error: string | null }> => {
