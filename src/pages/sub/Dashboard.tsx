@@ -64,9 +64,11 @@ const SubDashboard: React.FC = () => {
         
       if (error) throw error;
       
+      // Properly map the nested data structure
       return data.map(item => ({
         id: item.project_id,
-        name: item.projects?.name,
+        name: item.projects?.name || 'Unnamed Project',
+        description: item.projects?.description || '',
         contractAmount: item.contract_amount
       }));
     },
