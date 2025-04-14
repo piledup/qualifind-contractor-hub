@@ -51,11 +51,11 @@ export const safeInsert = async (tableName: "profiles" | "invitations" | "permis
   return result;
 };
 
-// Simpler function for inserting data with better typing
-export const typedInsert = async <T>(
+// Simplified function for inserting data without complex type inference
+export const typedInsert = async (
   tableName: "profiles" | "invitations" | "permissions" | "projects" | "subcontractors" | "qualification_documents" | "project_subcontractors", 
-  data: any // Keep 'any' to avoid type errors but we'll handle the response properly
-): Promise<{ data: T | null; error: any }> => {
+  data: any
+): Promise<{ data: any; error: any }> => {
   try {
     const { data: result, error } = await supabase
       .from(tableName)
@@ -64,8 +64,7 @@ export const typedInsert = async <T>(
     
     if (error) throw error;
     
-    // Use type assertion for the return value
-    return { data: result as unknown as T, error: null };
+    return { data: result, error: null };
   } catch (err) {
     return { data: null, error: err };
   }
@@ -94,17 +93,16 @@ export const handleSupabaseError = (error: any): string => {
   return error?.message || "An unexpected error occurred";
 };
 
-// Simplified query helper function to avoid excessive type instantiation
-export const supabaseQuery = async <T>(
+// Simplified query helper with basic typing
+export const supabaseQuery = async (
   queryFn: () => Promise<{ data: any; error: any }>
-): Promise<{ data: T | null; error: string | null }> => {
+): Promise<{ data: any; error: string | null }> => {
   try {
     const { data, error } = await queryFn();
     
     if (error) throw error;
     
-    // Simple type assertion
-    return { data: data as T, error: null };
+    return { data, error: null };
   } catch (err) {
     return { data: null, error: handleSupabaseError(err) };
   }
