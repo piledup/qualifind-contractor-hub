@@ -1,4 +1,3 @@
-
 import React from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -64,7 +63,7 @@ const SubDashboard: React.FC = () => {
         
       if (error) throw error;
       
-      // Properly map the nested data structure
+      // Properly map the nested data structure to flatten it
       return data.map(item => ({
         id: item.project_id,
         name: item.projects?.name || 'Unnamed Project',
@@ -139,171 +138,6 @@ const SubDashboard: React.FC = () => {
             </CardContent>
           </Card>
         )}
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">Qualification Status</CardTitle>
-              <CardDescription>
-                Your current qualification status
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center justify-center py-4">
-                  <div className={`w-24 h-24 rounded-full flex items-center justify-center ${
-                    isQualified ? 'bg-green-100' : 'bg-amber-100'
-                  }`}>
-                    {isQualified ? (
-                      <CheckCircle size={48} className="text-green-600" />
-                    ) : (
-                      <Clock size={48} className="text-amber-600" />
-                    )}
-                  </div>
-                </div>
-                
-                <div className="text-center">
-                  <h3 className="text-lg font-semibold">
-                    {isQualified ? "Qualified" : "Pending Qualification"}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    {isQualified 
-                      ? "You are qualified and ready to work on projects" 
-                      : "Your qualification is being reviewed"
-                    }
-                  </p>
-                </div>
-                
-                {isQualified && (
-                  <div className="space-y-2 pt-2">
-                    <div className="flex justify-between text-sm border-t pt-2">
-                      <span className="text-muted-foreground">Single Project Limit</span>
-                      <span className="font-medium">
-                        ${subcontractor.single_project_limit?.toLocaleString() || "N/A"}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Aggregate Limit</span>
-                      <span className="font-medium">
-                        ${subcontractor.aggregate_limit?.toLocaleString() || "N/A"}
-                      </span>
-                    </div>
-                  </div>
-                )}
-                
-                <Button asChild variant="outline" size="sm" className="w-full">
-                  <Link to="/qualification">
-                    {isQualified ? "View Qualification" : "Complete Qualification"}
-                    <ArrowRight size={14} className="ml-2" />
-                  </Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">Projects</CardTitle>
-              <CardDescription>
-                Your assigned construction projects
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div>
-                  <div className="text-3xl font-bold">{subProjects.length}</div>
-                  <div className="text-sm text-muted-foreground">Active Projects</div>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-muted/50 p-3 rounded-md">
-                    <div className="text-xl font-semibold">
-                      {subProjects.length}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      General Contractors
-                    </div>
-                  </div>
-                  <div className="bg-muted/50 p-3 rounded-md">
-                    <div className="text-xl font-semibold">
-                      ${(totalContractValue / 1000).toFixed(1)}K
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      Contract Value
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  {subProjects.length === 0 ? (
-                    <div className="text-sm text-muted-foreground text-center py-2">
-                      No projects assigned yet
-                    </div>
-                  ) : (
-                    subProjects.slice(0, 2).map(project => (
-                      <div key={project.id} className="flex items-center justify-between text-sm border-b pb-2">
-                        <div className="font-medium">{project.name}</div>
-                        <div className="text-muted-foreground">
-                          ${project.contractAmount?.toLocaleString() || "0"}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-                
-                <Button asChild variant="outline" size="sm" className="w-full">
-                  <Link to="/projects">
-                    View All Projects
-                    <ArrowRight size={14} className="ml-2" />
-                  </Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">Documents</CardTitle>
-              <CardDescription>
-                Your qualification documents
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div>
-                  <div className="text-3xl font-bold">{documents.length}</div>
-                  <div className="text-sm text-muted-foreground">Submitted Documents</div>
-                </div>
-                
-                <div className="space-y-2">
-                  {documents.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      No documents uploaded yet.
-                    </p>
-                  ) : (
-                    documents.slice(0, 3).map(doc => (
-                      <div key={doc.id} className="flex items-center justify-between text-sm border-b pb-2">
-                        <div className="font-medium truncate max-w-[150px]">
-                          {doc.document_type}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {new Date(doc.uploaded_at).toLocaleDateString()}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-                
-                <Button asChild variant="outline" size="sm" className="w-full">
-                  <Link to="/qualification">
-                    Manage Documents
-                    <ArrowRight size={14} className="ml-2" />
-                  </Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card className="col-span-1 md:col-span-2">
