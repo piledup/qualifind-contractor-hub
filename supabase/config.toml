@@ -2,30 +2,28 @@
 project_id = "vioaqyclkyrhoutysjmh"
 
 [api]
-# Disable Postgres server-side requests for the API
+# Enable all necessary APIs
 enabled_apis = ["rest", "auth", "storage", "realtime", "functions"]
 port = 54321
 
 [auth]
-# The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
-# in emails.
+# The base URL for your website - this should match your deployed URL
 site_url = "https://vioaqyclkyrhoutysjmh.lovable.app"
-# A list of URLs that auth providers are permitted to redirect to post authentication.
+# Additional redirect URLs
 additional_redirect_urls = ["http://localhost:3000", "http://localhost:3000/**", "https://localhost:3000/**", "capacitor://localhost:3000/**", "https://*.lovable.app/**", "https://vioaqyclkyrhoutysjmh.supabase.co/auth/v1/callback"]
-# How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
+# Token expiry time
 jwt_expiry = 3600
-# Allow/disallow new user signups to your project.
+# Allow new user signups
 enable_signup = true
-# If enabled, users need to confirm their email address before signing in.
+# Require email confirmation
 enable_confirmations = true
 
 [auth.email]
-# Allow/disallow new user signups via email to your project.
+# Allow signups via email
 enable_signup = true
-# If enabled, a user will be required to confirm any email change on both the old, and new email
-# addresses. If disabled, only the new email is required to confirm.
+# Require email confirmation on both old and new emails when changing
 double_confirm_changes = true
-# If enabled, users need to confirm their email address before signing in.
+# Require email confirmation
 enable_confirmations = true
 
 [auth.external.google]

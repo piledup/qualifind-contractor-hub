@@ -5,8 +5,8 @@ import type { Database } from './types';
 const SUPABASE_URL = "https://vioaqyclkyrhoutysjmh.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZpb2FxeWNsa3lyaG91dHlzam1oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM1MzUwMzQsImV4cCI6MjA1OTExMTAzNH0.umU9wju2XRnmN8ZcZyufWWXRqkisA_CN2zGY3-LA-MM";
 
-// Create a non-typed client to avoid excessive type instantiation
-const supabaseClient = createClient(
+// Create a client with explicit auth configuration
+export const supabase = createClient(
   SUPABASE_URL, 
   SUPABASE_PUBLISHABLE_KEY,
   {
@@ -19,9 +19,6 @@ const supabaseClient = createClient(
     }
   }
 );
-
-// Export the client without strong typing to avoid TypeScript issues
-export const supabase = supabaseClient;
 
 // Type-safe helper function for transforming database profile data to User type
 export const mapDbProfileToUser = (profileData: any) => {
@@ -39,12 +36,12 @@ export const mapDbProfileToUser = (profileData: any) => {
   };
 };
 
-// Helper function to safely filter by ID (handles UUID validation)
+// Helper function to safely filter by ID
 export const filterById = (id: string) => {
   return id;
 };
 
-// Define the type for table names to avoid string type errors
+// Define the type for table names
 type TableName = 'profiles' | 'invitations' | 'permissions' | 'projects' | 
                 'subcontractors' | 'qualification_documents' | 'project_subcontractors';
 
@@ -59,7 +56,7 @@ export const safeInsert = async (tableName: TableName, data: any) => {
   return result;
 };
 
-// Simplified typed insert function to avoid deep type instantiation
+// Simplified typed insert function
 export const typedInsert = async (tableName: TableName, data: any) => {
   try {
     const { data: result, error } = await supabase
@@ -98,7 +95,7 @@ export const handleSupabaseError = (error: any): string => {
   return error?.message || "An unexpected error occurred";
 };
 
-// Extremely simplified query helper to avoid type instantiation issues
+// Simplified query helper to avoid type instantiation issues
 export const supabaseQuery = async (queryFn: Function) => {
   try {
     const result = await queryFn();
